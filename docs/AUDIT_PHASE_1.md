@@ -3,6 +3,8 @@
 **Reviewed commit:** `c9e1a32` (`main`, 35 files / 2,627 insertions, 1 commit)
 **Review date:** 2026-11-06
 **Reviewer:** Arena Agent Mode
+**Update (2026-11-06):** the team has since selected **Magick.NET** (`Magick.NET-Q8-AnyCPU`, Apache-2.0) for the image engine, and FFmpeg + Pandoc bundled binaries for media/docs. Where this audit suggests SkiaSharp, read Magick.NET; the licence analysis in §5 still applies as written.
+
 **Method:** static review of every file in the repository (C#, XAML, csproj, sln, docs). No build or runtime execution was possible in the review environment (no .NET SDK, and WPF cannot build off Windows), so every claim below is backed by the code text, not by a test run. Items that must be confirmed on a Windows machine are marked **[verify-on-build]**.
 
 ---

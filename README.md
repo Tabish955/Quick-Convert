@@ -74,7 +74,7 @@ dotnet run --project src/QuickConvert.UI            # second launch without file
 ## Roadmap
 
 - [x] **Phase 1 — Scaffolding & plumbing.** Solution, models, `IConversionEngine`, `FormatRegistry`, single-instance mutex + named-pipe IPC with debounce, `BatchConversionCoordinator` (SemaphoreSlim + cancellation), MVVM shell, mock engine.
-- [ ] **Phase 2 — First real conversion + hardening.** `ConversionMatrix` (single source of truth), `IConversionEngineRouter`, SkiaSharp image engine (JPG/PNG/WEBP/…), pre-flight validation, IPC hardening, logging, one execution path. Details: [PHASE_2_SPEC.md](PHASE_2_SPEC.md).
+- [ ] **Phase 2 — First real conversion + hardening.** `ConversionMatrix` (single source of truth), `IConversionEngineRouter`, Magick.NET image engine (JPG/PNG/WEBP/…), pre-flight validation, IPC hardening, logging, one execution path. Details: [PHASE_2_SPEC.md](PHASE_2_SPEC.md).
 - [ ] **Phase 3 — Media engine.** Local FFmpeg for audio/video, hardware acceleration (NVENC/QSV/AMF), audio extraction. Licence decision required (see audit §5).
 - [ ] **Phase 4 — Documents & archives.** Pandoc / PDF tooling, 7-Zip or SharpCompress (zip/7z/tar/gz + RAR extraction).
 - [ ] **Phase 5 — Explorer integration & packaging.** Shell verb or `IExplorerCommand`, Inno Setup installer, portable build.

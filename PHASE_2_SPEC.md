@@ -151,18 +151,18 @@ public interface IConversionEngineRouter
 
 **Owner: Image engine. Owner: UI is blocked on this for §6 acceptance.**
 
-New project `src/QuickConvert.Engines.Images` using **SkiaSharp** (`SkiaSharp` + `SkiaSharp.NativeAssets.Win32`). MIT licensed, PNG/JPEG/WEBP/AVIF encode + decode. Do **not** use ImageSharp: its licence is the Six Labors Split Licence, which is not unconditionally free.
+New project `src/QuickConvert.Engines.Images` using **Magick.NET** (`Magick.NET-Q8-AnyCPU`, Apache-2.0 wrapper over ImageMagick). Chosen by the team over SkiaSharp (see `docs/AUDIT_PHASE_1.md` §4 for the trade-off) because one library covers rasters, WEBP, AVIF/HEIC and ICO — which is exactly the scope we agreed. Do **not** use ImageSharp: its licence is the Six Labors Split Licence, which is not unconditionally free.
 
 | Concern | Decision |
 |---|---|
-| Library | SkiaSharp (`SkiaSharp` + `SkiaSharp.NativeAssets.Win32`) |
-| Formats in | jpg, jpeg, png, webp, bmp, tiff, gif (first frame), avif (decode only if present) |
-| Formats out | jpg, png, webp, bmp, tiff, gif (single frame), pdf (via PdfSharp) |
+| Library | `Magick.NET-Q8-AnyCPU` (Apache-2.0). Adds a large native payload — check the Inno Setup size budget before Phase 5 |
+| Formats in | jpg, jpeg, png, webp, bmp, tiff, gif (first frame), ico; heic/avif only after confirming the delegate is present in the build |
+| Formats out | jpg, png, webp, bmp, tiff, gif (single frame), ico, pdf (via PdfSharp / Magick.NET `Write("pdf")`) |
 | Quality | `ConversionOptions.Quality` (1–100) → JPEG/WebP encoder quality |
 | Type | `IConversionEngine`, `net9.0` |
 | Progress | 0–10 decode, 10–85 encode, 85–100 flush/close (real, not simulated) |
 | Cancellation | `ct.ThrowIfCancellationRequested()` between decode/encode, delete the partial output on cancel |
-| EXIF | Orientation tag applied via `SKCodec.EncodedOrigin` (tests must cover it) |
+| EXIF | Orientation applied via `MagickImageInfo.Orientation` / `image.AutoOrient()` (tests must cover it) |
 | Output naming | `photo.png` → `photo (1).png`, `photo (2).png`; never overwrite unless `OverwriteExisting` |
 | Failure modes | Unreadable source → `ConversionResult(Success:false, ErrorMessage:"…")` with the reason; never throw out of `ConvertAsync` |
 
@@ -221,7 +221,7 @@ New project `src/QuickConvert.Engines.Images` using **SkiaSharp** (`SkiaSharp` +
 |---|---|---|---|---|
 | 1 | `ConversionMatrix` + `FileCategory` mapping + tests | Core | — | 0.5 d |
 | 2 | `IConversionEngineRouter` + DI wiring + fake-engine tests | Core | 1 | 0.5 d |
-| 3 | `Engines.Images` SkiaSharp engine (convert, EXIF, naming, cancel) | Image | 1 | 2 d |
+| 3 | `Engines.Images` Magick.NET engine (convert, AutoOrient, naming, cancel) | Image | 1 | 2 d |
 | 4 | Route popup + coordinator through the router; pre-flight validation | Core/UI | 2, 3 | 0.5 d |
 | 5 | IPC hardening + logging + global exception handlers | Platform | — | 1 d |
 | 6 | Popup unification + placement + mixed selection | UI | 4 | 1 d |

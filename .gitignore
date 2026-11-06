@@ -59,3 +59,17 @@ $RECYCLE.BIN/
 *.temp
 *whatsapp*
 *WHATSAPP*
+
+# Local CLI tool binaries — fetched by tools/fetch-tools.ps1, never committed (see tools/README.md)
+tools/ffmpeg/**
+tools/7z/**
+tools/pandoc/**
+!tools/ffmpeg/.gitkeep
+!tools/7z/.gitkeep
+!tools/pandoc/.gitkeep
+
+# Test / coverage output
+*.trx
+TestResults/
+coverage*.xml
+coverage*.json

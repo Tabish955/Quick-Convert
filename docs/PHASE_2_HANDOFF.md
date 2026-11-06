@@ -1,38 +1,69 @@
 # Phase 2 hand-off message (copy/paste)
 
-Ready to send as-is (WhatsApp / Teams / group chat). Update the name at the top before sending.
+Ready to send as-is. Swap the name at the top, and adjust the branch name if you're not handing over
+`main`.
 
 ---
 
-Hey Ali, Phase 1 is done and merged to `main` (`c9e1a32`). Before you start on Phase 2, one thing worth knowing: we have the whole skeleton working, but **nothing actually converts yet**. Right now every conversion goes through `MockConversionEngine`, which fakes 2.5 seconds of progress and then writes a text file with a `.png` extension on it. So if anyone demos the app and says "look, it converted", it didn't.
+Hey Ali, Phase 1 is properly closed now, so you're up for Phase 2. Pull the repo first, there's a lot
+new: `ROADMAP.md` (rewritten, read this one first), `PHASE_2_SPEC.md` (the old one in git was 9,454 bytes
+of null characters, seriously, so it's been rewritten), `LICENSE`, `THIRD-PARTY-NOTICES.md`, a
+`tests/QuickConvert.Core.Tests` project, and a Windows CI workflow. Build and tests still need one run on
+a real Windows machine, Hamza is doing that with Antigravity, so by the time you start the branch should
+compile clean. If it doesn't, tell me before you touch anything.
 
-Also heads up, `PHASE_2_SPEC.md` in the repo was 9,454 bytes of null characters. Completely unreadable, and since we only have one commit in the history it wasn't recoverable. I've rewritten it, so pull `main` before you start or you'll be reading the old broken one.
+**Where we actually are:** the skeleton is good. Single-instance mutex, named pipe with the 150 ms
+debounce, batch coordinator with `SemaphoreSlim` and cancellation, both windows on MVVM + DI. All of that
+works and you should build on it, not around it.
 
-**What Phase 1 actually gives you (all of this works, just build on it):**
-- Solution + projects: `Core`, `Engines.Media`, `Engines.Docs`, `UI`
-- Single-instance mutex + named pipe with the 150 ms debounce, so 20 right-clicked files become one batch
-- `BatchConversionCoordinator` with `SemaphoreSlim` concurrency, per-job cancellation, progress events
-- Both windows (quick popup + dashboard) wired with MVVM + DI
-- WPF-UI FluentWindows, tray package referenced (not used yet)
+What we don't have is a single real conversion. Every file goes through `MockConversionEngine`, which
+fakes 2.5 seconds of progress and writes a text file with a `.png` extension on it. So the app looks like
+it converts things and doesn't. That's your job this phase.
 
-**What Phase 2 has to deliver: one real, trustworthy conversion path.** JPG to PNG through Magick.NET, from the right-click popup, through the normal coordinator.
+**Phase 2 target: one real conversion path we can trust, JPG to PNG through Magick.NET.**
 
-Do these in order, they're ordered because 2 and 3 block everyone else:
+Six things, in this order, because 1 and 2 block everything else:
 
-1. **`ConversionMatrix` (1 day, do this first).** Single table of source → allowed targets, replacing the hardcoded format lists in `FormatRegistry`. Keep only our 25 formats. `.rar` can be a source but must never show up as an output, that's a licence thing not a preference. `PHASE_2_SPEC.md` §2 has the full table written out, just copy it.
+1. `ConversionMatrix`, one table of source → allowed targets for our 25 formats, replacing the hardcoded
+   lists in `FormatRegistry`. The full table is already written in `PHASE_2_SPEC.md` §2, copy it. Two
+   rules that are not negotiable: `.rar` can be a source but never a target (licence), and nothing goes in
+   the matrix that we can't actually convert.
+2. `IConversionEngineRouter`. Right now `App.xaml.cs:67` registers exactly one `IConversionEngine` as a
+   singleton, so the day the image engine and the FFmpeg engine both exist, one of them is unreachable.
+   Router takes `(sourceExt, targetExt)` and gives you the engine. After this, nothing but the coordinator
+   is allowed to call `ConvertAsync`.
+3. `QuickConvert.Engines.Images` with Magick.NET-Q8-AnyCPU (Apache 2.0, so no licence drama). JPG, PNG,
+   WEBP, BMP, TIFF, GIF, ICO. `AutoOrient()` so phone photos aren't sideways, unique names like
+   `photo (1).png`, real progress from the actual encode, and no half-written file left behind if someone
+   cancels.
+4. Capability gating in the UI. `CanConvert` is declared in the interface and never called once in the
+   whole codebase. The combo boxes should only show formats the router can really produce. If a user can
+   pick ZIP → PNG, we've failed.
+5. Hardened launch path. `SendFilesToPrimaryAsync` calls `Environment.Exit(0)` when the pipe connect fails,
+   which silently throws away the files the user right-clicked. Add a bounded retry, take the exit out of
+   the library, add `PipeOptions.CurrentUserOnly` (already done on the server), plus a global exception
+   handler and a rolling log file. Right now we have zero logging, so every bug report is "it doesn't work".
+6. One execution path. The popup takes `BatchConversionCoordinator` in its constructor and never uses it,
+   it just loops files one at a time, so popup conversions are serial and invisible to the dashboard.
+   Route it through the coordinator.
 
-2. **`IConversionEngineRouter` (half a day).** Right now we register exactly one `IConversionEngine` as a singleton in `App.xaml.cs:67`, so the moment the image engine and the FFmpeg engine both exist, one of them is dead code. Router takes `(sourceExt, targetExt)` and returns the engine that can do it. Nothing outside the coordinator should be calling `ConvertAsync` directly.
+There's also a half-day shell spike in the spec (§3 of `PHASE_2_SPEC.md` / D2 in `ROADMAP.md`). Just a
+per-user `HKCU` verb pointed at the built exe so we can see how the right-click actually feels on Windows
+11 and measure the time-to-popup with 20 files. Throwaway code, don't polish it, we just need the answer.
 
-3. **`QuickConvert.Engines.Images` with Magick.NET (2 days).** `Magick.NET-Q8-AnyCPU`, Apache 2.0. JPG/PNG/WEBP/BMP/TIFF/GIF/ICO in and out, PDF out later. Real progress from the actual decode/encode steps, `AutoOrient()` so phone photos aren't sideways, unique names (`photo (1).png`), and make sure a cancelled conversion doesn't leave a half-written file in the output folder.
+Don't start on theming, the tray icon or animations. Polishing a fake converter is wasted time.
 
-4. **Make `CanConvert` mean something (half a day).** It's declared in `IConversionEngine` and literally never called anywhere in the codebase. The combo boxes should only ever show formats the router can actually produce. If a user can select ZIP → PNG, we failed.
+**Done looks like:** right-click 10 JPGs in Explorer, get 10 real PNGs in parallel, all of them open in
+Photos, no duplicate names, cancel works mid-batch, ZIP → PNG is refused in the UI instead of crashing,
+and RAR is never offered as an output.
 
-5. **One execution path.** The quick popup takes `BatchConversionCoordinator` in its constructor and then never uses it, it just loops files one by one. So popup conversions are serial and don't show up on the dashboard. Delete that loop and go through the coordinator.
+Run `dotnet test tests/QuickConvert.Core.Tests` before every push, add a test when you add behaviour, and
+keep each task in its own PR with a `core:` / `img:` / `ui:` / `platform:` prefix so the rest of us can
+review without stepping on each other.
 
-Don't start on theming, tray icon, or animations yet. UI polish comes after step 3 lands, otherwise you're polishing a fake.
+One more thing: we're keeping the repo MIT, but FFmpeg and Pandoc are GPL, so before we drop those binaries
+into `tools/` we need the notices updated. `tools/README.md` explains the setup and `THIRD-PARTY-NOTICES.md`
+has the rules. Not your problem this phase, just don't be surprised when it comes up.
 
-**Done looks like:** right-click 10 JPGs, get 10 real PNGs in parallel, all open in Photos, no duplicates, cancel works mid-batch, and nothing in the UI offers a format we can't make.
-
-One last thing: we said MIT/GPL from the first commit but there's no LICENSE file in the repo yet, and no third-party notices. Before we drop FFmpeg and Pandoc binaries into `/tools`, let's get that right, because those are GPL and it changes what we can ship.
-
-Shout if anything in the spec looks wrong, and put each task in its own PR with the prefix `core:`, `img:`, `ui:` so we can review without stepping on each other.
+Ping me if the spec looks wrong anywhere. If you find a mistake, fix the spec in the same PR, that's
+exactly how we ended up with a 9 KB file of nulls last time.

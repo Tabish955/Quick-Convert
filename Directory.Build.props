@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    Solution-wide defaults. Individual projects may override, but should not need to.
+    Keep this file boring: no warnings-as-errors yet (Phase 1 code has known nullable
+    warnings we will clear as each engine lands).
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <Deterministic>true</Deterministic>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <!-- Bindings are string-based; the WPF-specific analyzers add noise for no gain here. -->
+    <NoWarn>$(NoWarn);CA1707;CA1062;CA2007</NoWarn>
+  </PropertyGroup>
+
+  <!-- CI builds set ContinuousIntegrationBuild so paths in PDBs are normalised. -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>

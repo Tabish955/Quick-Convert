@@ -243,7 +243,11 @@ public class BatchConversionCoordinator
         }
 
         var job = Jobs.FirstOrDefault(j => j.Id == jobId);
-        if (job != null && job.Status == ConversionStatus.Queued)
+
+        // Pending jobs have no CancellationTokenSource yet (it is created when the job starts), so
+        // cancelling them means marking them Cancelled before the batch picks them up. Previously
+        // only Queued jobs were handled, which made "cancel" a silent no-op for a fresh queue.
+        if (job != null && job.Status is ConversionStatus.Queued or ConversionStatus.Pending)
         {
             job.Status = ConversionStatus.Cancelled;
             job.StatusText = "Cancelled";

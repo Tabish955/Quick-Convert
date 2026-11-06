@@ -11,6 +11,13 @@
 
 ## 0. Ground rules (do not re-litigate these in Phase 2)
 
+> **Phase 1 is closed** as of this document: `LICENSE`, `THIRD-PARTY-NOTICES.md`, `.editorconfig`,
+> `Directory.Build.props`, the `tests/QuickConvert.Core.Tests` project and the Windows CI workflow are
+> in the repo. `dotnet build` / `dotnet test` still need one run on a Windows machine before Phase 2
+> starts — see `docs/PHASE_1_VERIFY_PROMPT.md`.
+>
+> Product-level plan, decision gates and risks live in `ROADMAP.md`. This file stays scoped to Phase 2 work.
+
 1. **Scope is ~25 essential formats**, not 300. JPG, PNG, WEBP, BMP, TIFF, GIF, MP4, MKV, WEBM, MP3, WAV, FLAC, AAC, OGG, M4A, PDF, TXT, MD, HTML, DOCX, CSV, JSON, ZIP, 7Z, TAR, GZ. E-book later.
 2. **RAR is extract-only.** `.rar` may appear as a *source*, never as a *target*. This is a licence obligation (unRAR restriction), not a preference. A unit test must enforce it.
 3. **Offline, $0, no telemetry, no network calls at runtime.** Ever.
@@ -226,7 +233,7 @@ New project `src/QuickConvert.Engines.Images` using **Magick.NET** (`Magick.NET-
 | 5 | IPC hardening + logging + global exception handlers | Platform | — | 1 d |
 | 6 | Popup unification + placement + mixed selection | UI | 4 | 1 d |
 | 7 | Theming/tray (optional, last) | UI | 6 | 0.5 d |
-| 8 | CI green on `windows-latest` + tests project | Platform | 1 | 0.5 d |
+| 8 | ~~CI + tests project~~ **done in Phase 1**; now: keep CI green and add a test with every task below | Platform | — | ongoing |
 
 Tasks 1, 2, 5, 8 can run in parallel. Task 3 needs 1 only. **Do not start 7 before 4 and 6 are merged.**
 

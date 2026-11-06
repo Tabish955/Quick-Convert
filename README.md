@@ -59,6 +59,7 @@ Quick-Convert/
 
 ```bash
 dotnet build QuickConvert.sln
+dotnet test tests/QuickConvert.Core.Tests      # Core unit tests
 dotnet run --project src/QuickConvert.UI
 ```
 
@@ -73,11 +74,18 @@ dotnet run --project src/QuickConvert.UI            # second launch without file
 
 ## Roadmap
 
-- [x] **Phase 1 — Scaffolding & plumbing.** Solution, models, `IConversionEngine`, `FormatRegistry`, single-instance mutex + named-pipe IPC with debounce, `BatchConversionCoordinator` (SemaphoreSlim + cancellation), MVVM shell, mock engine.
-- [ ] **Phase 2 — First real conversion + hardening.** `ConversionMatrix` (single source of truth), `IConversionEngineRouter`, Magick.NET image engine (JPG/PNG/WEBP/…), pre-flight validation, IPC hardening, logging, one execution path. Details: [PHASE_2_SPEC.md](PHASE_2_SPEC.md).
-- [ ] **Phase 3 — Media engine.** Local FFmpeg for audio/video, hardware acceleration (NVENC/QSV/AMF), audio extraction. Licence decision required (see audit §5).
-- [ ] **Phase 4 — Documents & archives.** Pandoc / PDF tooling, 7-Zip or SharpCompress (zip/7z/tar/gz + RAR extraction).
-- [ ] **Phase 5 — Explorer integration & packaging.** Shell verb or `IExplorerCommand`, Inno Setup installer, portable build.
+Full plan, exit criteria and decision gates: **[ROADMAP.md](ROADMAP.md)**.
+
+- [x] **Phase 1 — Skeleton, IPC, contract.** Solution, models, `IConversionEngine`, single-instance mutex + named-pipe IPC with debounce, `BatchConversionCoordinator`, MVVM shell, licence + notices, CI, Core unit tests.
+- [ ] **Phase 2 — First real conversion.** `ConversionMatrix`, `IConversionEngineRouter`, Magick.NET image engine (JPG/PNG/WEBP/…), capability gating, hardened launch path, Explorer verb spike. Details: [PHASE_2_SPEC.md](PHASE_2_SPEC.md).
+- [ ] **Phase 3 — Media engine.** Local FFmpeg for audio/video, hardware acceleration (NVENC/QSV/AMF), audio extraction.
+- [ ] **Phase 4 — Documents & archives.** Pandoc, PDF output, MiniExcel, SharpCompress + `7za.exe`.
+- [ ] **Phase 5 — Explorer integration & packaging.** Production shell verb, Inno Setup installer.
+- [ ] **Phase 6 — v1.0 hardening.** Theming, tray, crash reporting (local only), performance, offline audit.
+
+## Licence
+
+Quick-Convert's source is **MIT** (see [LICENSE](LICENSE)). Bundled command-line tools (FFmpeg, 7-Zip, Pandoc) are separate programs under their own licences — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Binaries are never committed to `tools/`; see [tools/README.md](tools/README.md).
 
 ## Non-negotiables
 

@@ -1,0 +1,18 @@
+# Normalise line endings in the repository; Windows devs can still have CRLF locally
+# via core.autocrlf. Everything else is treated as binary.
+* text=auto
+
+*.sln       text
+*.cs        text diff=csharp
+*.csproj    text
+*.props     text
+*.xaml      text
+*.md        text
+*.yml       text
+
+*.png       binary
+*.ico       binary
+*.exe       binary
+*.dll       binary
+*.7z        binary
+*.zip       binary

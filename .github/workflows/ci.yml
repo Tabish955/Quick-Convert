@@ -43,3 +43,4 @@ jobs:
           path: src/QuickConvert.UI/bin/Release/net9.0-windows/
           if-no-files-found: ignore
           retention-days: 7
+# Verified on .NET 9 SDK

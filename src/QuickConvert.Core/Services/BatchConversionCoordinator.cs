@@ -186,6 +186,7 @@ public class BatchConversionCoordinator
                 if (result.Success)
                 {
                     job.Status = ConversionStatus.Completed;
+                    job.ProgressPercentage = 100;
                     job.OutputFilePath = result.OutputFilePath;
                     job.StatusText = "Completed";
                 }

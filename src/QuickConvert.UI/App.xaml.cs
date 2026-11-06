@@ -1,0 +1,131 @@
+using System.IO;
+using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
+using QuickConvert.Core.Interfaces;
+using QuickConvert.Core.Ipc;
+using QuickConvert.Core.Models;
+using QuickConvert.Core.Services;
+using QuickConvert.UI.ViewModels;
+using QuickConvert.UI.Views;
+
+namespace QuickConvert.UI;
+
+/// <summary>
+/// Interaction logic for App.xaml.
+/// Orchestrates DI, Single-Instance Named Pipe IPC, and Explorer entry routing.
+/// </summary>
+public partial class App : Application
+{
+    private IServiceProvider? _serviceProvider;
+    private SingleInstancePipeService? _pipeService;
+    private QuickPopupWindow? _activeQuickPopupWindow;
+    private MainDashboardWindow? _activeDashboardWindow;
+
+    protected override async void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        // 1. Initialize IPC Single-Instance Service
+        _pipeService = new SingleInstancePipeService();
+        bool isPrimary = _pipeService.TryAcquireSingleInstance();
+
+        if (!isPrimary)
+        {
+            // Secondary instance: transmit arguments to primary via Named Pipe and terminate immediately
+            await SingleInstancePipeService.SendFilesToPrimaryAsync(e.Args, timeoutMs: 300, exitOnSent: true);
+            return;
+        }
+
+        // 2. Setup Dependency Injection
+        var services = new ServiceCollection();
+        ConfigureServices(services);
+        _serviceProvider = services.BuildServiceProvider();
+
+        // 3. Start Named Pipe Server on primary instance
+        _pipeService.FilesReceivedFromExplorer += OnFilesReceivedFromExplorer;
+        _pipeService.StartPipeServer();
+
+        // 4. Initial Routing based on launch arguments
+        var incomingFiles = e.Args.Where(File.Exists).ToList();
+
+        if (incomingFiles.Count > 0)
+        {
+            // Launched with files from Explorer -> Show Quick Popup
+            var cursor = SingleInstancePipeService.GetCursorPosition();
+            ShowQuickPopup(incomingFiles, cursor);
+        }
+        else
+        {
+            // Launched directly (e.g. Start Menu) -> Show Full Dashboard
+            ShowMainDashboard();
+        }
+    }
+
+    private void ConfigureServices(IServiceCollection services)
+    {
+        // Core Services
+        services.AddSingleton<IConversionEngine, MockConversionEngine>();
+        services.AddSingleton<BatchConversionCoordinator>();
+        services.AddSingleton(_pipeService!);
+
+        // ViewModels
+        services.AddTransient<QuickPopupViewModel>();
+        services.AddSingleton<MainDashboardViewModel>();
+
+        // Windows
+        services.AddTransient<QuickPopupWindow>();
+        services.AddSingleton<MainDashboardWindow>();
+    }
+
+    private void OnFilesReceivedFromExplorer(object? sender, FilesReceivedEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            ShowQuickPopup(e.FilePaths, e.CursorPosition);
+        });
+    }
+
+    public void ShowQuickPopup(IReadOnlyList<string> filePaths, ScreenPoint cursor)
+    {
+        if (_activeQuickPopupWindow == null || !_activeQuickPopupWindow.IsLoaded)
+        {
+            var vm = _serviceProvider!.GetRequiredService<QuickPopupViewModel>();
+            _activeQuickPopupWindow = new QuickPopupWindow(vm);
+
+            vm.RequestOpenDashboard += files =>
+            {
+                ShowMainDashboard(files);
+            };
+
+            _activeQuickPopupWindow.Closed += (s, ev) => _activeQuickPopupWindow = null;
+        }
+
+        _activeQuickPopupWindow.ViewModel.LoadFiles(filePaths);
+        _activeQuickPopupWindow.PositionNearCursor(cursor);
+        _activeQuickPopupWindow.Show();
+        _activeQuickPopupWindow.Activate();
+    }
+
+    public void ShowMainDashboard(IEnumerable<string>? initialFiles = null)
+    {
+        if (_activeDashboardWindow == null || !_activeDashboardWindow.IsLoaded)
+        {
+            _activeDashboardWindow = _serviceProvider!.GetRequiredService<MainDashboardWindow>();
+            _activeDashboardWindow.Closed += (s, ev) => _activeDashboardWindow = null;
+        }
+
+        if (initialFiles != null)
+        {
+            _activeDashboardWindow.ViewModel.AddFiles(initialFiles);
+        }
+
+        _activeDashboardWindow.Show();
+        _activeDashboardWindow.Activate();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _pipeService?.Dispose();
+        base.OnExit(e);
+    }
+}

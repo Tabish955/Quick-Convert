@@ -1,0 +1,102 @@
+<ui:FluentWindow x:Class="QuickConvert.UI.Views.QuickPopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:vm="clr-namespace:QuickConvert.UI.ViewModels"
+        mc:Ignorable="d"
+        Title="Quick Convert"
+        Height="380" Width="450"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        ShowInTaskbar="True"
+        Topmost="True"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        d:DataContext="{d:DesignInstance vm:QuickPopupViewModel}">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header / Selected File Details -->
+        <Border Grid.Row="0" Background="#0C888888" CornerRadius="8" Padding="14,10" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="Quick Convert (Convertio Offline)" FontSize="11" FontWeight="SemiBold" Foreground="#888888"/>
+                <TextBlock Text="{Binding FileSummary}" FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                <TextBlock Text="{Binding DetectedCategory, StringFormat='Category: {0}'}" FontSize="11" Foreground="#666666" Margin="0,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Target Format Selector -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,14">
+            <TextBlock Text="Convert to Format:" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <ComboBox Grid.Column="0"
+                          ItemsSource="{Binding AvailableTargetFormats}"
+                          SelectedItem="{Binding SelectedTargetFormat}"
+                          FontSize="14"
+                          Height="36"
+                          Margin="0,0,8,0"/>
+
+                <Button Grid.Column="1"
+                        Content="Open Dashboard"
+                        Command="{Binding OpenFullDashboardCommand}"
+                        Height="36"
+                        Padding="12,0"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Progress and Status -->
+        <StackPanel Grid.Row="2" Margin="0,0,0,14">
+            <Grid Margin="0,0,0,6">
+                <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#444444" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding OverallProgress, StringFormat='{}{0:0}%'}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right"/>
+            </Grid>
+            <ProgressBar Value="{Binding OverallProgress}" Maximum="100" Height="8"/>
+        </StackPanel>
+
+        <!-- Output Folder Action (shown after conversion) -->
+        <StackPanel Grid.Row="3" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Button Content="📁 Open Converted File Folder"
+                    Command="{Binding OpenOutputFolderCommand}"
+                    Visibility="{Binding ConversionCompleted, Converter={StaticResource BoolToVis}}"
+                    Padding="14,8"
+                    FontWeight="SemiBold"/>
+        </StackPanel>
+
+        <!-- Action Buttons Footer -->
+        <Grid Grid.Row="4" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Content="Cancel"
+                    Command="{Binding CancelConversionCommand}"
+                    IsEnabled="{Binding IsConverting}"
+                    Margin="0,0,6,0"
+                    Height="38"/>
+
+            <Button Grid.Column="1"
+                    Content="Convert Now"
+                    Command="{Binding ConvertNowCommand}"
+                    IsEnabled="{Binding IsConverting, Converter={StaticResource InverseBoolConverter}}"
+                    Margin="6,0,0,0"
+                    Height="38"
+                    FontWeight="Bold"/>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

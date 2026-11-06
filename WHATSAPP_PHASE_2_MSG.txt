@@ -1,31 +1,31 @@
-Salam bhai, Phase 1 ka core kaam wrap up ho gaya hai aur repo pe push kar diya hai maine.
+Hey, Phase 1 is wrapped up and pushed to main.
 
-Tu ab `main` pull kar le aur apni nayi branch bana le:
+Whenever you're ready, pull the repo and create your branch:
 git checkout main
 git pull origin main
 git checkout -b phase-2-ui
 
-Tera main kaam UI ka visual redesign hai using Wpf.Ui controls (Fluent styling, Windows 11 rounded cards, acrylic/mica background, dark/light theme wagera). Maine saara MVVM wiring aur dependency injection pehle se set kar diya hai, so tujhe zero backend ya logic likhni paregi.
+Your main focus for Phase 2 is giving the app a proper visual overhaul using Wpf.Ui controls (Windows 11 Fluent design, rounded cards, acrylic/mica background, and clean light/dark themes). All the MVVM plumbing, dependency injection, and data bindings are already wired up, so you won't need to write any backend or conversion logic.
 
-Tujhe bas yeh do files design karni hain inside `src/QuickConvert.UI/Views`:
+The two files you need to redesign are located in `src/QuickConvert.UI/Views`:
+
 1. `QuickPopupWindow.xaml`:
-Yeh wo chota popup hai jo right-click pe cursor ke paas khulta hai. Isme ViewModel already hooked hai (`QuickPopupViewModel`). Tujhe direct properties mil jayengi:
-- Header ke liye: `FileSummary`, `FileCount`, `DetectedCategory`
-- Target format select karne ke liye: `AvailableTargetFormats` (ObservableCollection) aur `SelectedTargetFormat`
-- Progress aur status: `OverallProgress` (0 to 100), `StatusMessage`, `IsConverting`, `ConversionCompleted`
-- Buttons ke liye commands: `ConvertNowCommand`, `CancelConversionCommand`, `OpenFullDashboardCommand`, `OpenOutputFolderCommand`
+This is the lightweight popup that opens right near the cursor when files are sent from Explorer. It's connected to `QuickPopupViewModel`. Here are the properties and commands already waiting for you:
+- Header info: `FileSummary`, `FileCount`, `DetectedCategory`
+- Target format dropdown: `AvailableTargetFormats` (ObservableCollection) and `SelectedTargetFormat`
+- Progress & status: `OverallProgress` (0 to 100), `StatusMessage`, `IsConverting`, `ConversionCompleted`
+- Button commands: `ConvertNowCommand`, `CancelConversionCommand`, `OpenFullDashboardCommand`, `OpenOutputFolderCommand`
 
 2. `MainDashboardWindow.xaml`:
-Yeh full batch converter window hai (`MainDashboardViewModel`). Iske andar:
-- Queue list: DataGrid ya custom ListView bind kar de `Jobs` collection pe (har item me `FileName`, `FormattedFileSize`, `Category`, `TargetExtension`, `ProgressPercentage`, `StatusText` bindable hain).
-- Top bar: `AddFilesCommand`, `SelectedGlobalFormat` & `AvailableGlobalFormats`, `OutputFolderPath`, `BrowseOutputFolderCommand`, `OpenOutputFolderCommand`.
-- Actions: `StartQueueCommand`, `CancelAllCommand`, `ClearCompletedCommand`.
+This is the full batch converter dashboard, wired to `MainDashboardViewModel`:
+- Queue view: bind your DataGrid or cards to `Jobs` (each job exposes `FileName`, `FormattedFileSize`, `Category`, `TargetExtension`, `ProgressPercentage`, and `StatusText`).
+- Top bar: `AddFilesCommand`, `SelectedGlobalFormat` and `AvailableGlobalFormats`, `OutputFolderPath`, `BrowseOutputFolderCommand`, `OpenOutputFolderCommand`.
+- Queue actions: `StartQueueCommand`, `CancelAllCommand`, `ClearCompletedCommand`.
 
-Best part yeh hai ke `MockConversionEngine` already chal raha hai. Tu `dotnet run --project src/QuickConvert.UI` karega ya VS me F5 dabayega, files drag drop karega aur Convert dabayega tou 2.5 seconds ka real-time animated progress bar aur dummy file create ho jayegi, so tu visually aaram se test kar sakta hai.
+The mock engine (`MockConversionEngine`) is already working. If you hit F5 in Visual Studio or run `dotnet run --project src/QuickConvert.UI`, drop in a couple of files and hit Convert, you'll see a realistic 2.5-second live progress bar and dummy output files created. You can use that to test your animations, progress bars, and states right away.
 
-Bas ek do cheezon ka khayal rakhna:
-- `QuickConvert.Core` ko touch mat karna, wo freeze hai.
-- `.xaml.cs` code-behind me koi conversion ya business logic mat daalna, sab kuch ViewModel commands ke through bind karna.
-- Root pe maine detailed `PHASE_2_SPEC.md` bhi daal diya hai agar properties ki exact types dekhni hon.
+Just two quick things to keep in mind:
+- Don't touch anything in `QuickConvert.Core` — that layer is frozen for Phase 1.
+- Avoid writing business or conversion logic in `.xaml.cs` code-behind; keep everything bound to the ViewModel commands.
 
-Check kar le aur koi issue ho tou bata.
+I also added a detailed reference in `PHASE_2_SPEC.md` at the project root if you need exact property signatures. Ping me if you run into any issues getting it running.

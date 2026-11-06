@@ -1,14 +1,13 @@
-# Prompt for Antigravity — finish and verify Phase 1 on Windows
+# Phase 1 build checklist — run this on a Windows box
 
-**Why this exists:** everything in Phase 1 is in the repo, but it has never been compiled. The review
-environment had no .NET SDK and no NuGet access, and the WPF project cannot build off Windows anyway.
-This prompt is the first thing to run on a Windows machine. Paste it into Antigravity as-is.
-
----
-
-## Prompt (copy everything below the line)
+**Why this exists:** the WPF project targets `net9.0-windows`, so it can only be built and launched on
+Windows. Everything below assumes a machine with Visual Studio 2022 (.NET desktop workload) and the .NET 9
+SDK, and takes about twenty minutes. Work top to bottom and write the result into
+`docs/PHASE_1_CLOSEOUT.md`.
 
 ---
+
+## What to do
 
 You are working in the Quick-Convert repository: a .NET 9 WPF app that adds an offline file converter to
 the Windows File Explorer context menu. Four developers work on it in phases. Phase 1 (solution skeleton,

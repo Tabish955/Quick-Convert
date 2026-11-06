@@ -14,7 +14,7 @@
 > **Phase 1 is closed** as of this document: `LICENSE`, `THIRD-PARTY-NOTICES.md`, `.editorconfig`,
 > `Directory.Build.props`, the `tests/QuickConvert.Core.Tests` project and the Windows CI workflow are
 > in the repo. `dotnet build` / `dotnet test` still need one run on a Windows machine before Phase 2
-> starts — see `docs/PHASE_1_VERIFY_PROMPT.md`.
+> starts — see `docs/PHASE_1_BUILD_CHECKLIST.md`.
 >
 > Product-level plan, decision gates and risks live in `ROADMAP.md`. Verification status of Phase 1 (including
 > what is still unconfirmed: CI has never run, runtime scenarios untested) is in `docs/PHASE_1_CLOSEOUT.md`.

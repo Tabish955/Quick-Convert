@@ -2,17 +2,17 @@
 
 **Date:** 2026-11-06
 **Branch checked:** `arena/14036ad6-quick-convert` @ `42e7b84` (also merged to `main` @ `56fa238`)
-**Verifier:** repo inspection + GitHub API (no .NET SDK in the verification environment)
+**Checked by:** repo inspection + GitHub API (no .NET SDK available in the checking environment)
 
 ---
 
 ## Verdict
 
-Phase 1 is **code-complete**. The build/test verification was attempted on Windows and produced two real
+Phase 1 is **code-complete**. The build/test pass was run on Windows and produced two real
 fixes — one of which was a genuine bug in my own test — but the verification is **not finished**: the CI
 workflow has never executed, the three runtime scenarios are unconfirmed, and no report was filed.
 
-| # | Demand (from `docs/PHASE_1_VERIFY_PROMPT.md`) | Status | Evidence |
+| # | Item (from `docs/PHASE_1_BUILD_CHECKLIST.md`) | Status | Evidence |
 |---|---|---|---|
 | 1 | `dotnet restore` + `dotnet build -c Release` clean | 🟡 **Probably** | Test suite was run and a failing assertion was found, which implies a successful compile of Core + tests. No build log, no confirmation that the **WPF** project compiled. |
 | 2 | `dotnet test` all green | 🟡 **Likely, unconfirmed** | `fd4805a` fixes a real failure (see below). No pass/fail counts reported. |
@@ -24,7 +24,7 @@ workflow has never executed, the three runtime scenarios are unconfirmed, and no
 
 ---
 
-## What the verification actually changed
+## What the Windows run actually changed
 
 ### `96217df` — `job.ProgressPercentage = 100` on success
 

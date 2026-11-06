@@ -175,12 +175,14 @@ public class SingleInstancePipeService : IDisposable
             NamedPipeServerStream? server = null;
             try
             {
+                // CurrentUserOnly: restrict the pipe to the same Windows user, so another local
+                // account cannot push file paths into this process.
                 server = new NamedPipeServerStream(
                     PipeName,
                     PipeDirection.In,
                     NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous);
+                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
                 await server.WaitForConnectionAsync(ct);
 

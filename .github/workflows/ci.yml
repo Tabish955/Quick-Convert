@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # The WPF project targets net9.0-windows, so this must run on Windows.
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Show SDK
+        run: dotnet --info
+
+      - name: Restore
+        run: dotnet restore QuickConvert.sln
+
+      - name: Build
+        run: dotnet build QuickConvert.sln --no-restore -c Release
+
+      # Runs automatically once a test project exists (see PHASE_2_SPEC.md §7 task 8).
+      - name: Test
+        if: ${{ hashFiles('tests/**/*.csproj') != '' }}
+        run: dotnet test QuickConvert.sln --no-build -c Release --logger "console;verbosity=normal"
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickconvert-bin
+          path: src/QuickConvert.UI/bin/Release/net9.0-windows/
+          if-no-files-found: ignore
+          retention-days: 7

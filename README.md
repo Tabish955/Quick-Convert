@@ -1,77 +1,90 @@
 # Quick-Convert
 
-An offline, $0-cost, privacy-first Convertio alternative integrated directly into Windows File Explorer, built on .NET 9 (`net9.0` and `net9.0-windows`).
+An offline, $0-cost, privacy-first file converter that lives in the Windows File Explorer right-click menu. No cloud, no accounts, no upload limits. Built on .NET 9 (`net9.0` / `net9.0-windows`).
+
+> **Current state (Phase 1 complete, Phase 2 starting):** the application shell, single-instance IPC and batch coordinator work, but **no real conversion engine exists yet** — every conversion currently runs through `MockConversionEngine`, which writes a placeholder text file. See [docs/AUDIT_PHASE_1.md](docs/AUDIT_PHASE_1.md) for the full audit and [PHASE_2_SPEC.md](PHASE_2_SPEC.md) for the plan that adds the first real engine.
 
 ---
 
-## ⚡ Overview
+## Scope
 
-Quick-Convert allows users to select one or multiple files in Windows File Explorer, right-click, and instantly convert them between hundreds of media, document, spreadsheet, and archive formats without uploading private files to the cloud or paying subscription fees.
+**~25 essential formats.** Deliberately narrow — quality over quantity.
 
-### Core Highlights
-- **100% Offline & Free:** No cloud API keys, bandwidth limits, or privacy concerns.
-- **Convertio Matrix:** Over 50+ file extensions supported across Images, Audio, Video, Documents, Spreadsheets, E-Books, Fonts, and Archives.
-- **Windows File Explorer Integration:** Seamless multi-file selection support using a Global Mutex and Named Pipe IPC (`QuickConvert_Explorer_Pipe`) with a 150ms debounce window.
-- **Fluent UI Design:** Built with `WPF-UI` (Lepo.co) adhering to modern Windows 11 Fluent design principles (Mica, rounded geometry, Dark/Light modes).
-- **Concurrency & Concurrency Control:** Parallel batch conversions orchestrated via `SemaphoreSlim`.
+| Category | Formats |
+|---|---|
+| Image | JPG, PNG, WEBP, BMP, TIFF, GIF (+ PDF output) |
+| Audio | MP3, WAV, FLAC, AAC, OGG, M4A |
+| Video | MP4, MKV, WEBM, MOV (+ audio extraction) |
+| Document | TXT, MD, HTML, DOCX, PDF, CSV, JSON |
+| Archive | ZIP, 7Z, TAR, GZ — **RAR is extract-only** (never created; unRAR is licence-restricted) |
+| E-book | EPUB, MOBI (later phase) |
+
+## How it works
+
+1. Select one or many files in File Explorer and pick **Quick Convert** from the context menu.
+2. A compact popup opens next to the cursor with only the target formats that are valid for the whole selection.
+3. Convert. Files are written next to the originals (or to a folder you choose) with non-destructive naming (`photo (1).png`).
+
+Multi-file right-click starts one process per file; a global mutex plus a named pipe (`QuickConvert_Explorer_Pipe`) with a 150 ms debounce collapses those launches into a single popup.
 
 ---
 
-## 🏗 Solution Architecture
-
-The solution (`QuickConvert.sln`) is divided into 4 isolated projects:
+## Solution layout
 
 ```
 Quick-Convert/
 ├── src/
-│   ├── QuickConvert.Core/             # .NET 9.0 Class Library
-│   │   ├── Models/                    # Enums, ConversionJob, ConversionOptions, ConversionResult
-│   │   ├── Interfaces/                # IConversionEngine contract
-│   │   ├── Services/                  # FormatRegistry, MockConversionEngine, BatchConversionCoordinator
-│   │   └── Ipc/                       # SingleInstancePipeService (Mutex + Named Pipe + Debounce)
-│   ├── QuickConvert.Engines.Media/    # .NET 9.0 Class Library (Phase 3 FFmpeg Stub)
-│   ├── QuickConvert.Engines.Docs/     # .NET 9.0 Class Library (Phase 4 Pandoc & 7-Zip Stub)
-│   └── QuickConvert.UI/               # .NET 9.0 WPF Application (net9.0-windows)
-│       ├── ViewModels/                # QuickPopupViewModel, MainDashboardViewModel
-│       ├── Views/                     # QuickPopupWindow, MainDashboardWindow
-│       ├── Converters/                # InverseBoolConverter, BoolToVis
-│       ├── App.xaml / App.xaml.cs     # DI, IPC Routing, Startup handling
-│       └── QuickConvert.UI.csproj
-├── tools/                             # Local CLI tools directory
-│   ├── ffmpeg/.gitkeep
-│   ├── pandoc/.gitkeep
-│   └── 7z/.gitkeep
-├── PHASE_2_SPEC.md                    # Developer handoff guide for UI Designer
-├── WHATSAPP_PHASE_2_MSG.txt           # WhatsApp handoff communication
-├── global.json                        # Pinned to .NET 9.0 (latestFeature)
-├── .gitignore                         # Visual Studio .gitignore
-└── QuickConvert.sln                   # Visual Studio Solution
+│   ├── QuickConvert.Core/            # net9.0 — models, interfaces, format matrix, batch coordinator, IPC
+│   │   ├── Models/                   # ConversionJob, ConversionOptions, ConversionResult, ConversionStatus, FileCategory
+│   │   ├── Interfaces/               # IConversionEngine
+│   │   ├── Services/                 # FormatRegistry, MockConversionEngine, BatchConversionCoordinator
+│   │   └── Ipc/                      # SingleInstancePipeService (Mutex + Named Pipe + debounce)
+│   ├── QuickConvert.Engines.Media/   # net9.0 — FFmpeg engine (Phase 3, currently a stub that throws)
+│   ├── QuickConvert.Engines.Docs/    # net9.0 — documents + archives (Phase 4, currently a stub that throws)
+│   └── QuickConvert.UI/              # net9.0-windows WPF app (WPF-UI FluentWindow)
+│       ├── ViewModels/               # QuickPopupViewModel, MainDashboardViewModel
+│       ├── Views/                    # QuickPopupWindow, MainDashboardWindow
+│       ├── Converters/               # InverseBoolConverter
+│       └── App.xaml(.cs)             # DI, IPC routing, startup
+├── docs/AUDIT_PHASE_1.md             # Phase 1 audit + Phase 2 recommendations
+├── PHASE_2_SPEC.md                   # Active phase spec (single source of truth for Phase 2)
+├── tools/                            # Local CLI binaries, NOT in Git: ffmpeg/, 7z/, pandoc/
+├── global.json                       # Pinned to .NET SDK 9.0.100 (rollForward: latestFeature)
+└── QuickConvert.sln
 ```
 
----
+## Building
 
-## 🚀 Getting Started
+**Prerequisites:** .NET 9 SDK (9.0.100+), Windows 10 1809+ or Windows 11. Visual Studio 2022 with the *.NET desktop development* workload for the WPF project.
 
-### Prerequisites
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) (SDK 9.0.100+)
-- Windows 10 (1809+) or Windows 11
-
-### Build Solution
 ```bash
 dotnet build QuickConvert.sln
-```
-
-### Run UI App
-```bash
 dotnet run --project src/QuickConvert.UI
 ```
 
----
+The WPF project targets `net9.0-windows`, so the full solution only builds on Windows. CI runs on `windows-latest` (`.github/workflows/ci.yml`).
 
-## 📋 Project Roadmap
+Try the IPC path without Explorer integration:
 
-- [x] **Phase 1 (Completed):** Solution scaffolding, FormatRegistry, SingleInstance Mutex + Named Pipe IPC, MockConversionEngine with realistic 2.5s progress increments, Batch queue coordinator, MVVM shell.
-- [ ] **Phase 2:** Fluent UI redesign with `WPF-UI` controls, smooth animations, and system tray integration.
-- [ ] **Phase 3:** High-performance Media Engine integrating local FFmpeg binaries for audio/video transcoding and hardware acceleration (NVENC, QSV, AMF).
-- [ ] **Phase 4:** Document & Archive Engine integrating Pandoc and 7-Zip CLI orchestrators.
-- [ ] **Phase 5:** Windows Explorer Shell Extension (`IExplorerCommand`) and MSIX/InnoSetup packaging.
+```bash
+dotnet run --project src/QuickConvert.UI -- "C:\path\to\photo.jpg" "C:\path\to\other.jpg"
+dotnet run --project src/QuickConvert.UI            # second launch without files opens the dashboard
+```
+
+## Roadmap
+
+- [x] **Phase 1 — Scaffolding & plumbing.** Solution, models, `IConversionEngine`, `FormatRegistry`, single-instance mutex + named-pipe IPC with debounce, `BatchConversionCoordinator` (SemaphoreSlim + cancellation), MVVM shell, mock engine.
+- [ ] **Phase 2 — First real conversion + hardening.** `ConversionMatrix` (single source of truth), `IConversionEngineRouter`, SkiaSharp image engine (JPG/PNG/WEBP/…), pre-flight validation, IPC hardening, logging, one execution path. Details: [PHASE_2_SPEC.md](PHASE_2_SPEC.md).
+- [ ] **Phase 3 — Media engine.** Local FFmpeg for audio/video, hardware acceleration (NVENC/QSV/AMF), audio extraction. Licence decision required (see audit §5).
+- [ ] **Phase 4 — Documents & archives.** Pandoc / PDF tooling, 7-Zip or SharpCompress (zip/7z/tar/gz + RAR extraction).
+- [ ] **Phase 5 — Explorer integration & packaging.** Shell verb or `IExplorerCommand`, Inno Setup installer, portable build.
+
+## Non-negotiables
+
+- 100% offline at runtime. No telemetry, no auto-update pings, no network calls.
+- No paid services, no licence-encumbered dependencies without a documented decision.
+- A format may only be offered in the UI if an engine reports it can actually convert it.
+
+## Contributing
+
+Phase Relay rules (4 developers): one concern per PR, contract changes to `IConversionEngine`/`ConversionJob`/`ConversionOptions` need three approvals, and every new dependency needs a licence note. Full checklist in [PHASE_2_SPEC.md §8](PHASE_2_SPEC.md).

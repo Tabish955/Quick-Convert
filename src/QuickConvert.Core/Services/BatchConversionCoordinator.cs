@@ -70,9 +70,11 @@ public class BatchConversionCoordinator
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 continue;
 
-            // Avoid duplicate path already pending
+            // Avoid duplicate path already pending, queued or actively converting
             if (Jobs.Any(j => j.InputFilePath.Equals(path, StringComparison.OrdinalIgnoreCase) &&
-                              (j.Status == ConversionStatus.Pending || j.Status == ConversionStatus.Converting)))
+                              (j.Status == ConversionStatus.Pending ||
+                               j.Status == ConversionStatus.Queued ||
+                               j.Status == ConversionStatus.Converting)))
             {
                 continue;
             }

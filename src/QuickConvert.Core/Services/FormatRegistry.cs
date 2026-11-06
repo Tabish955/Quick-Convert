@@ -216,28 +216,19 @@ public static class FormatRegistry
         var paths = inputFilePaths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
         if (paths == null || paths.Count == 0) return Array.Empty<string>();
 
-        HashSet<string>? commonTargets = null;
+        // Preserve the ORDER of the first file's target list so that index 0 (the format the UI
+        // pre-selects) is deterministic. A HashSet would make the default format vary between runs
+        // for the same multi-file selection.
+        var orderedTargets = GetSupportedTargetFormats(Path.GetExtension(paths[0]));
+        if (orderedTargets.Count == 0) return Array.Empty<string>();
 
-        foreach (var path in paths)
+        var commonTargets = new HashSet<string>(orderedTargets, StringComparer.OrdinalIgnoreCase);
+
+        for (int i = 1; i < paths.Count && commonTargets.Count > 0; i++)
         {
-            var ext = Path.GetExtension(path);
-            var supported = GetSupportedTargetFormats(ext);
-
-            if (commonTargets == null)
-            {
-                commonTargets = new HashSet<string>(supported, StringComparer.OrdinalIgnoreCase);
-            }
-            else
-            {
-                commonTargets.IntersectWith(supported);
-            }
-
-            if (commonTargets.Count == 0)
-            {
-                break;
-            }
+            commonTargets.IntersectWith(GetSupportedTargetFormats(Path.GetExtension(paths[i])));
         }
 
-        return commonTargets != null ? commonTargets.ToList() : (IReadOnlyList<string>)Array.Empty<string>();
+        return orderedTargets.Where(commonTargets.Contains).ToList();
     }
 }

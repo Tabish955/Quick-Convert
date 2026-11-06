@@ -1,11 +1,17 @@
-## Visual Studio / .NET GitIgnore
-.vs/
-[Bb]in/
-[Oo]bj/
-*.user
+## Visual Studio / .NET Standard .gitignore
+
+# User-specific files
+*.rsuser
 *.suo
+*.user
 *.userosscache
 *.sln.docstates
+
+# User-specific files (MonoDevelop / Xamarin Studio)
+*.userprefs
+
+# Visual Studio 2015/2017/2019/2022 cache & options directory
+.vs/
 .vscode/
 
 # Build results
@@ -23,6 +29,10 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# Visual Studio clean & test output
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
 # NuGet Packages
 *.nupkg
 *.snupkg
@@ -30,11 +40,11 @@ bld/
 !**/packages/build/
 *.nuget.props
 *.nuget.targets
-.fake/
 
-# Rider / JetBrains
+# JetBrains Rider / ReSharper
 .idea/
 *.DotSettings.user
+_ReSharper*/
 
 # OS generated files
 Thumbs.db
@@ -43,7 +53,9 @@ Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
 
-# Temporary / Output files
+# Temporary, scratch & handoff files
 *.log
 *.tmp
 *.temp
+*whatsapp*
+*WHATSAPP*

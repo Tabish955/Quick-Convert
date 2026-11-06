@@ -95,4 +95,4 @@ Quick-Convert's source is **MIT** (see [LICENSE](LICENSE)). Bundled command-line
 
 ## Contributing
 
-Phase Relay rules (4 developers): one concern per PR, contract changes to `IConversionEngine`/`ConversionJob`/`ConversionOptions` need three approvals, and every new dependency needs a licence note. Full checklist in [PHASE_2_SPEC.md §8](PHASE_2_SPEC.md).
+Phase Relay rules (4 developers): one concern per PR, contract changes to `IConversionEngine`/`ConversionJob`/`ConversionOptions` need three approvals, and every new dependency needs a licence note. Full checklist in [PHASE_2_SPEC.md §10](PHASE_2_SPEC.md).

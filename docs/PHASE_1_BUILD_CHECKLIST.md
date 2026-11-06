@@ -20,7 +20,7 @@ build, make the tests pass, and confirm the app actually runs. Do not start Phas
 - Windows 10 1809+ or Windows 11, Visual Studio 2022 with the *.NET desktop development* workload, .NET 9
   SDK (9.0.100 or later).
 - Run `git switch arena/14036ad6-quick-convert` (or work on whatever branch the team tells you) and
-  `git pull`. Read, in this order: `ROADMAP.md`, `PHASE_2_SPEC.md` §0, `docs/AUDIT_PHASE_1.md`.
+  `git pull`. Read, in this order: `ROADMAP.md`, `PHASE_2_SPEC.md`, `docs/AUDIT_PHASE_1.md`.
 - `global.json` pins SDK 9.0.100 with `rollForward: latestFeature`. If the installed SDK is not 9.0.1xx,
   fix `global.json` or install the right SDK — do not delete the file.
 

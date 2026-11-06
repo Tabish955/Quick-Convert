@@ -1,59 +1,67 @@
-# PHASE 2 SPEC — Real Conversion & Hardened Shell Path
+# Phase 2 Specification: Image Conversion and Launch Path
 
-> **Status:** active. This file replaces the previous `PHASE_2_SPEC.md`, which was committed as
-> 9,454 bytes of NUL characters and could not be recovered from Git history (the repo has a single
-> commit). Content below is derived from the code at `c9e1a32` plus the scope decisions in
-> `docs/AUDIT_PHASE_1.md`.
->
-> **Read `docs/AUDIT_PHASE_1.md` first.** It contains the evidence for every claim here.
-
----
-
-## 0. Ground rules (do not re-litigate these in Phase 2)
-
-> **Phase 1 is closed** as of this document: `LICENSE`, `THIRD-PARTY-NOTICES.md`, `.editorconfig`,
-> `Directory.Build.props`, the `tests/QuickConvert.Core.Tests` project and the Windows CI workflow are
-> in the repo. `dotnet build` / `dotnet test` still need one run on a Windows machine before Phase 2
-> starts — see `docs/PHASE_1_BUILD_CHECKLIST.md`.
->
-> Product-level plan, decision gates and risks live in `ROADMAP.md`. Verification status of Phase 1 (including
-> what is still unconfirmed: CI has never run, runtime scenarios untested) is in `docs/PHASE_1_CLOSEOUT.md`.
-> This file stays scoped to Phase 2 work.
-
-1. **Scope is ~25 essential formats**, not 300. JPG, PNG, WEBP, BMP, TIFF, GIF, MP4, MKV, WEBM, MP3, WAV, FLAC, AAC, OGG, M4A, PDF, TXT, MD, HTML, DOCX, CSV, JSON, ZIP, 7Z, TAR, GZ. E-book later.
-2. **RAR is extract-only.** `.rar` may appear as a *source*, never as a *target*. This is a licence obligation (unRAR restriction), not a preference. A unit test must enforce it.
-3. **Offline, $0, no telemetry, no network calls at runtime.** Ever.
-4. **One execution path.** The quick popup and the dashboard must both go through `BatchConversionCoordinator`. No second `await engine.ConvertAsync(...)` loop in a ViewModel.
-5. **No UI may advertise a conversion the engines cannot perform.** `CanConvert` must be consulted before a job is enqueued.
-6. **`FormatRegistry` is not the product scope.** It is a lookup table; the product scope is the matrix in §2.
+**Status:** in progress
+**Scope:** Phase 2 only. Product-level planning, decision gates and risks are in `ROADMAP.md`.
+**Prerequisite:** Phase 1, whose outstanding verification items are listed in `docs/PHASE_1_CLOSEOUT.md`.
 
 ---
 
 ## 1. Objective
 
-Phase 1 produced working plumbing (single instance, IPC, MVVM shell, batch coordinator) and a mock engine. Phase 2 produces **one real conversion path** that a user can trust, and hardens the launch path that carries the user's file selection into the app.
+Phase 1 delivered the application skeleton: single instance handling, inter-process communication, the
+MVVM shell and the batch coordinator. All conversions currently run through `MockConversionEngine`, which
+simulates progress and writes a text file with the requested extension. No real conversion exists.
 
-**Phase 2 is done when** a reviewer can right-click one or ten JPEGs in File Explorer, pick PNG/WEBP, get real images, cancel mid-batch without debris, and never sees the app claim a format it cannot produce.
+Phase 2 delivers the first real conversion path and the supporting infrastructure that later engines will
+use:
 
-Non-goals for Phase 2: FFmpeg/audio/video, Pandoc/documents, the Explorer COM shell extension, the installer. Those are Phases 3–5.
+1. A single definition of which conversions are supported.
+2. An engine selection layer that can serve several engines.
+3. A working image engine.
+4. Capability checking, so the interface never offers a conversion that will fail.
+5. A launch path that reports failures instead of discarding the user's selection.
+6. One conversion execution path shared by both windows.
+7. A timeboxed investigation of the Explorer context menu.
+
+Phase 2 does not include audio, video, document or archive conversion, the production context-menu
+integration, or the installer. Those belong to Phases 3 to 5.
+
+**Completion criterion:** a reviewer can select one or ten JPEG files in File Explorer, request PNG or
+WEBP, receive valid images, cancel a batch without leaving partial files behind, and never see a format
+offered that the application cannot produce.
 
 ---
 
-## 2. Deliverable 1 — `ConversionMatrix` (single source of truth)
+## 2. Constraints
 
-**Owner: Core. Blocks everyone else. Do this first.**
+1. The supported format scope is the set agreed in `ROADMAP.md` section 2. It is not extended in Phase 2.
+2. RAR may be used as an input format and must never be offered as an output format. This is a licence
+   obligation arising from the unRAR restriction, and a unit test enforces it.
+3. The application performs no network access at runtime and collects no telemetry.
+4. All conversions are executed by `BatchConversionCoordinator`. No view model may call
+   `IConversionEngine.ConvertAsync` directly.
+5. The interface may only offer conversions that an engine reports as supported.
+6. `FormatRegistry` is a lookup table and is not the definition of product scope. The definition is
+   `ConversionMatrix`.
 
-Replace the per-category lists in `FormatRegistry` with one explicit table, and delete everything it does not contain.
+---
+
+## 3. Deliverable 1: `ConversionMatrix`
+
+**Owner:** Core. This work blocks every other deliverable.
+
+Replace the per-category format lists in `FormatRegistry` with a single explicit table. Remove any format
+that is not in the table.
 
 ```csharp
 namespace QuickConvert.Core.Services;
 
 public static class ConversionMatrix
 {
-    // source ext -> allowed target exts (empty = extraction/consumption only)
+    // Source extension to allowed target extensions.
     private static readonly Dictionary<string, string[]> Matrix = new(StringComparer.OrdinalIgnoreCase)
     {
-        // --- images -------------------------------------------------------------
+        // Images
         [".jpg"]  = [".png", ".webp", ".bmp", ".tiff", ".gif", ".pdf"],
         [".jpeg"] = [".png", ".webp", ".bmp", ".tiff", ".gif", ".pdf"],
         [".png"]  = [".jpg", ".webp", ".bmp", ".tiff", ".gif", ".pdf"],
@@ -62,16 +70,16 @@ public static class ConversionMatrix
         [".tiff"] = [".jpg", ".png", ".webp", ".bmp", ".gif", ".pdf"],
         [".gif"]  = [".jpg", ".png", ".webp", ".bmp", ".tiff", ".pdf"],
 
-        // --- audio (Phase 3) ----------------------------------------------------
-        [".mp3"] = [".wav", ".flac", ".aac", ".ogg", ".m4a"],
-        [".wav"] = [".mp3", ".flac", ".aac", ".ogg", ".m4a"],
+        // Audio (Phase 3)
+        [".mp3"]  = [".wav", ".flac", ".aac", ".ogg", ".m4a"],
+        [".wav"]  = [".mp3", ".flac", ".aac", ".ogg", ".m4a"],
         [".flac"] = [".mp3", ".wav", ".aac", ".ogg", ".m4a"],
-        [".aac"] = [".mp3", ".wav", ".flac", ".ogg", ".m4a"],
-        [".ogg"] = [".mp3", ".wav", ".flac", ".aac", ".m4a"],
-        [".m4a"] = [".mp3", ".wav", ".flac", ".aac", ".ogg"],
-        [".wma"] = [".mp3", ".wav", ".flac"],
+        [".aac"]  = [".mp3", ".wav", ".flac", ".ogg", ".m4a"],
+        [".ogg"]  = [".mp3", ".wav", ".flac", ".aac", ".m4a"],
+        [".m4a"]  = [".mp3", ".wav", ".flac", ".aac", ".ogg"],
+        [".wma"]  = [".mp3", ".wav", ".flac"],
 
-        // --- video (Phase 3) ----------------------------------------------------
+        // Video (Phase 3)
         [".mp4"]  = [".mkv", ".webm", ".mov", ".gif", ".mp3", ".wav", ".m4a"],
         [".mkv"]  = [".mp4", ".webm", ".mov", ".gif", ".mp3", ".wav", ".m4a"],
         [".avi"]  = [".mp4", ".mkv", ".webm", ".mov", ".gif", ".mp3", ".wav"],
@@ -79,7 +87,7 @@ public static class ConversionMatrix
         [".webm"] = [".mp4", ".mkv", ".mov", ".gif", ".mp3", ".wav"],
         [".wmv"]  = [".mp4", ".mkv", ".gif", ".mp3", ".wav"],
 
-        // --- documents (Phase 4) ------------------------------------------------
+        // Documents and spreadsheets (Phase 4)
         [".txt"]  = [".md", ".html", ".pdf", ".docx", ".csv"],
         [".md"]   = [".txt", ".html", ".pdf", ".docx"],
         [".html"] = [".txt", ".md", ".pdf", ".docx"],
@@ -88,164 +96,226 @@ public static class ConversionMatrix
         [".docx"] = [".pdf", ".txt", ".md", ".html", ".rtf", ".odt"],
         [".rtf"]  = [".txt", ".html", ".pdf", ".docx"],
         [".odt"]  = [".txt", ".html", ".pdf", ".docx"],
-        [".pdf"]  = [".txt", ".png", ".jpg"],   // text extraction / first page only
+        [".pdf"]  = [".txt", ".png", ".jpg"],   // Text extraction or first page only.
 
-        // --- archives (Phase 4) -------------------------------------------------
+        // Archives (Phase 4)
         [".zip"] = [".7z", ".tar", ".gz"],
         [".7z"]  = [".zip", ".tar"],
         [".tar"] = [".zip", ".7z", ".gz"],
         [".gz"]  = [".zip", ".7z", ".tar"],
-        [".rar"] = [".zip", ".7z", ".tar"],     // extract-only source. NEVER a target.
+        [".rar"] = [".zip", ".7z", ".tar"],     // Input only. Never an output format.
     };
 
-    public static bool IsKnownSource(string ext) => Matrix.ContainsKey(Normalize(ext));
-
-    public static IReadOnlyList<string> GetTargets(string sourceExt) =>
-        Matrix.TryGetValue(Normalize(sourceExt), out var t) ? t : [];
-
-    public static bool IsAllowed(string sourceExt, string targetExt)
-    {
-        var target = Normalize(targetExt);
-        return GetTargets(sourceExt).Contains(target, StringComparer.OrdinalIgnoreCase);
-    }
-
-    /// <summary>Extensions this matrix must never offer as output (licence/feasibility).</summary>
+    /// <summary>Extensions that must never be offered as an output format.</summary>
     public static IReadOnlySet<string> ForbiddenTargets { get; } =
         new HashSet<string>([".rar"], StringComparer.OrdinalIgnoreCase);
 
-    private static string Normalize(string? ext) =>
-        string.IsNullOrWhiteSpace(ext) ? string.Empty
-        : ext.Trim().ToLowerInvariant().StartsWith('.') ? ext.Trim().ToLowerInvariant()
-        : "." + ext.Trim().ToLowerInvariant();
+    public static bool IsKnownSource(string extension) => Matrix.ContainsKey(Normalize(extension));
+
+    public static IReadOnlyList<string> GetTargets(string sourceExtension) =>
+        Matrix.TryGetValue(Normalize(sourceExtension), out var targets) ? targets : [];
+
+    public static bool IsAllowed(string sourceExtension, string targetExtension) =>
+        GetTargets(sourceExtension).Contains(Normalize(targetExtension), StringComparer.OrdinalIgnoreCase);
+
+    private static string Normalize(string? extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = extension.Trim().ToLowerInvariant();
+        return trimmed.StartsWith('.') ? trimmed : "." + trimmed;
+    }
 }
 ```
 
-**Acceptance criteria**
+### Acceptance criteria
 
-- [ ] `FormatRegistry` has no hardcoded per-category format arrays left; it delegates to `ConversionMatrix`.
-- [ ] `ForbiddenTargets` is asserted by a test: `Assert.DoesNotContain(".rar", allTargets)`.
-- [ ] Every extension in the matrix has a `FileCategory` (no `Unknown` for a known source).
-- [ ] Removing an extension from the matrix removes it from every combo box with no other code change.
+- [ ] `FormatRegistry` contains no hardcoded per-category format arrays and delegates to `ConversionMatrix`.
+- [ ] A test asserts that no entry in `ForbiddenTargets` appears in any target list.
+- [ ] Every source extension in the matrix resolves to a `FileCategory` other than `Unknown`.
+- [ ] Removing an extension from the matrix removes it from every list in the interface, with no other
+      code change.
 
 ---
 
-## 3. Deliverable 2 — Engine router (blocks engine #2 onwards)
+## 4. Deliverable 2: `IConversionEngineRouter`
 
-**Owner: Core.**
+**Owner:** Core. This work is required before a second engine is added.
 
-`IConversionEngine` is currently resolved as a single singleton (`App.xaml.cs:67`). That cannot survive four engines. Introduce:
+`IConversionEngine` is currently registered as a single implementation in dependency injection
+(`App.xaml.cs:67`). With more than one engine, one implementation becomes unreachable. Introduce a router:
 
 ```csharp
 public interface IConversionEngineRouter
 {
-    IConversionEngine? Resolve(string sourceExt, string targetExt);
-    IReadOnlyList<string> GetAvailableTargets(string sourceExt); // matrix ∩ engine capability
-    string EngineNameFor(string sourceExt, string targetExt);
+    IConversionEngine? Resolve(string sourceExtension, string targetExtension);
+
+    /// <summary>Formats the matrix allows and an engine can actually produce.</summary>
+    IReadOnlyList<string> GetAvailableTargets(string sourceExtension);
+
+    string GetEngineName(string sourceExtension, string targetExtension);
 }
 ```
 
-- Registered as a **singleton** over `IEnumerable<IConversionEngine>`; engines are registered as `IConversionEngine` multiples.
-- `GetAvailableTargets` is what the ViewModels bind to. Nothing else may read `FormatRegistry`/`ConversionMatrix` for UI lists.
-- Coordinator and popup call `Resolve(...)`; if `null`, the job fails **before** enqueue with a user-facing reason ("MP4 → PNG is not supported. Convert to MP3 or use the dashboard.").
+### Requirements
 
-**Acceptance criteria**
+- Register the router as a singleton over `IEnumerable<IConversionEngine>`; register engines as multiple
+  `IConversionEngine` implementations.
+- `GetAvailableTargets` is the only source for format lists in view models. Nothing else reads
+  `FormatRegistry` or `ConversionMatrix` to populate the interface.
+- The coordinator and the popup call `Resolve`. A `null` result fails the job before it is enqueued, with a
+  user-facing message such as "MP4 to PNG is not supported. Convert to MP3 or use the dashboard."
 
-- [ ] Two engines registered simultaneously, each receives only its own files (verified by a fake engine in tests).
-- [ ] No `await engine.ConvertAsync` call exists outside `BatchConversionCoordinator`.
-- [ ] `IConversionEngine.CanConvert` is called at least once per enqueue (no dead contract).
+### Acceptance criteria
+
+- [ ] Two engines can be registered at once, and each receives only the files it supports (verified with a
+      test double).
+- [ ] No call to `IConversionEngine.ConvertAsync` exists outside `BatchConversionCoordinator`.
+- [ ] `IConversionEngine.CanConvert` is called during enqueue, so the method is no longer unused.
 
 ---
 
-## 4. Deliverable 3 — Real image engine (the vertical slice)
+## 5. Deliverable 3: Image engine
 
-**Owner: Image engine. Owner: UI is blocked on this for §6 acceptance.**
+**Owner:** Image engine. The interface work in section 7 depends on this deliverable.
 
-New project `src/QuickConvert.Engines.Images` using **Magick.NET** (`Magick.NET-Q8-AnyCPU`, Apache-2.0 wrapper over ImageMagick). Chosen by the team over SkiaSharp (see `docs/AUDIT_PHASE_1.md` §4 for the trade-off) because one library covers rasters, WEBP, AVIF/HEIC and ICO — which is exactly the scope we agreed. Do **not** use ImageSharp: its licence is the Six Labors Split Licence, which is not unconditionally free.
+Add a new project, `src/QuickConvert.Engines.Images`, implemented with Magick.NET
+(`Magick.NET-Q8-AnyCPU`, Apache 2.0). One library covers raster formats, WEBP, AVIF, HEIC and ICO, which is
+the agreed image scope. ImageSharp is not used because the Six Labors Split Licence is not unconditionally
+free.
 
-| Concern | Decision |
+| Concern | Requirement |
 |---|---|
-| Library | `Magick.NET-Q8-AnyCPU` (Apache-2.0). Adds a large native payload — check the Inno Setup size budget before Phase 5 |
-| Formats in | jpg, jpeg, png, webp, bmp, tiff, gif (first frame), ico; heic/avif only after confirming the delegate is present in the build |
-| Formats out | jpg, png, webp, bmp, tiff, gif (single frame), ico, pdf (via PdfSharp / Magick.NET `Write("pdf")`) |
-| Quality | `ConversionOptions.Quality` (1–100) → JPEG/WebP encoder quality |
-| Type | `IConversionEngine`, `net9.0` |
-| Progress | 0–10 decode, 10–85 encode, 85–100 flush/close (real, not simulated) |
-| Cancellation | `ct.ThrowIfCancellationRequested()` between decode/encode, delete the partial output on cancel |
-| EXIF | Orientation applied via `MagickImageInfo.Orientation` / `image.AutoOrient()` (tests must cover it) |
-| Output naming | `photo.png` → `photo (1).png`, `photo (2).png`; never overwrite unless `OverwriteExisting` |
-| Failure modes | Unreadable source → `ConversionResult(Success:false, ErrorMessage:"…")` with the reason; never throw out of `ConvertAsync` |
+| Library | `Magick.NET-Q8-AnyCPU`. Verify the Inno Setup size budget before Phase 5. |
+| Input formats | jpg, jpeg, png, webp, bmp, tiff, gif (first frame), ico. HEIC and AVIF only after the decoder is confirmed on a clean machine. |
+| Output formats | jpg, png, webp, bmp, tiff, gif (single frame), ico, and pdf through PdfSharp or the Magick.NET PDF writer. |
+| Quality | `ConversionOptions.Quality` (1 to 100) maps to the JPEG and WebP encoder quality setting. |
+| Target framework | `net9.0`, implements `IConversionEngine`. |
+| Progress | Real values derived from the operation: 0 to 10 for decoding, 10 to 85 for encoding, 85 to 100 for writing and flush. |
+| Cancellation | Check the token between decoding and encoding; delete any partial output before returning. |
+| Orientation | Apply the EXIF orientation through `MagickImageInfo.Orientation` and `AutoOrient()`. A test covers this. |
+| Output naming | `photo.png`, then `photo (1).png`, `photo (2).png`. Overwrite only when `OverwriteExisting` is set. |
+| Failure handling | An unreadable input returns `ConversionResult` with `Success` false and a reason. `ConvertAsync` must not throw. |
 
-**Acceptance criteria**
+### Acceptance criteria
 
-- [ ] A 4000×3000 JPEG converts to PNG in < 2 s on a normal laptop, output opens in Photos.
-- [ ] Same source → WEBP produces a file starting with `RIFF….WEBP`.
-- [ ] A phone photo with `Orientation=6` is not rotated after conversion.
-- [ ] Cancel mid-encode leaves **no** partial file in the output folder.
-- [ ] `MockConversionEngine` is no longer registered in any DI path that ships.
-
----
-
-## 5. Deliverable 4 — Hardened launch path + observability
-
-**Owner: Platform.**
-
-1. `SingleInstancePipeService`:
-   - remove `Environment.Exit` from the library; return `bool`/`SendResult`;
-   - bounded retry (5 attempts, 60 ms back-off) before giving up;
-   - server created with `PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly`;
-   - keep the 150 ms debounce and the duplicate-path `HashSet`.
-2. `App.OnStartup`: wrap in `try/catch`; hook `DispatcherUnhandledException` + `AppDomain.CurrentDomain.UnhandledException`; log and show a message instead of dying.
-3. Logging: rolling file at `%LOCALAPPDATA%\QuickConvert\logs\quickconvert-{date}.log`, 7-day retention, no file paths at `Info` level (privacy), full detail at `Debug`.
-4. If the launch handshake fails, the secondary instance shows a small window/balloon ("QuickConvert is starting…") and exits — never a silent no-op.
-
-**Acceptance criteria**
-
-- [ ] Killing the primary mid-handshake, then right-clicking 3 files, produces a visible explanation and a log entry containing the failure reason.
-- [ ] `Global\` mutex path still verified for two users on the same machine.
-- [ ] A thrown exception in a command handler produces a log file + dialog, not a vanished process.
+- [ ] A 4000 by 3000 JPEG converts to PNG in under two seconds on a typical laptop, and the result opens in
+      the Windows Photos application.
+- [ ] The same source converted to WEBP produces a file beginning with the `RIFF` and `WEBP` markers.
+- [ ] A photograph with EXIF orientation 6 is not rotated incorrectly after conversion.
+- [ ] Cancelling during encoding leaves no partial file in the output folder.
+- [ ] `MockConversionEngine` is not registered in any shipping configuration.
 
 ---
 
-## 6. Deliverable 5 — One execution path + popup correctness
+## 6. Deliverable 4: Launch path and diagnostics
 
-**Owner: UI.**
+**Owner:** Platform.
 
-- `QuickPopupViewModel` drops `IConversionEngine` and uses `BatchConversionCoordinator` (so concurrency, cancellation and dashboard counters are shared). Keep the popup's compact progress contract by subscribing to coordinator events.
-- Mixed selections with an empty intersection show an explicit message + "Open Dashboard", never the first file's target list.
-- Popup placement: convert `GetCursorPos` (physical px) to the right monitor's work area in DIUs; support negative `Left` (monitors left of primary) and per-monitor DPI.
-- Dark/light theme switch (`ui:ThemesDictionary`), tray icon (`Hardcodet.NotifyIcon.Wpf` is already referenced and currently unused) or remove the package.
-- Rename `AddFiles(IEnumerable<string>)` → `AddFilePaths` to avoid shadowing the generated command.
+1. `SingleInstancePipeService`
+   - Remove `Environment.Exit` from the library and return a result instead.
+   - Retry a failed connection up to five times with a short back-off before reporting failure.
+   - Create the server with `PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly`.
+   - Keep the 150 ms debounce and the duplicate-path check.
+2. `App.OnStartup`
+   - Wrap startup in `try`/`catch`.
+   - Handle `DispatcherUnhandledException` and `AppDomain.CurrentDomain.UnhandledException`.
+   - Log the failure and show a message instead of terminating silently.
+3. Logging
+   - Rolling file at `%LOCALAPPDATA%\QuickConvert\logs\quickconvert-{date}.log`.
+   - Seven-day retention.
+   - File paths are recorded only at `Debug` level.
+4. Failure feedback
+   - If the handshake fails, the secondary instance shows a short message and exits. It must not exit
+     without informing the user.
 
-**Acceptance criteria**
+### Acceptance criteria
 
-- [ ] Popup appears next to the cursor at 100 %, 150 % and 200 % scaling, on primary and secondary monitors.
-- [ ] A conversion started in the popup is visible in the dashboard with the same job id.
-- [ ] Selecting 5 JPGs + 1 ZIP shows "no common target", and the ZIP is never queued.
+- [ ] Terminating the primary instance during the handshake, then selecting three files, produces a visible
+      explanation and a log entry containing the reason.
+- [ ] The `Global\` mutex path is verified with two user accounts on the same machine.
+- [ ] An exception thrown in a command handler produces a log entry and a dialog rather than a vanished
+      process.
 
 ---
 
-## 7. Work breakdown by relay order
+## 7. Deliverable 5: Single execution path and popup behaviour
 
-| # | Task | Owner | Depends on | Est. |
+**Owner:** Interface.
+
+- `QuickPopupViewModel` uses `BatchConversionCoordinator` instead of `IConversionEngine`, so concurrency,
+  cancellation and progress are shared with the dashboard. The compact progress display is driven by
+  coordinator events.
+- A mixed selection with no common target format shows an explicit message and an "Open Dashboard" action.
+  It must not fall back to the first file's target list.
+- Popup placement converts the cursor position from physical pixels to the destination monitor's working
+  area in device-independent units. Negative coordinates (monitors to the left of the primary) and
+  per-monitor scaling are supported.
+- Rename `AddFiles(IEnumerable<string>)` to `AddFilePaths` so it does not shadow the generated command.
+- Either implement the theme switch and tray icon, or remove `Hardcodet.NotifyIcon.Wpf`, which is
+  referenced but unused. Both are lower priority than the items above.
+
+### Acceptance criteria
+
+- [ ] The popup is positioned correctly at 100%, 150% and 200% scaling, on both primary and secondary
+      monitors.
+- [ ] A conversion started in the popup appears in the dashboard under the same job identifier.
+- [ ] Selecting five JPEG files and one ZIP shows "no common target format" and does not queue the ZIP.
+
+---
+
+## 8. Deliverable 6: Context menu investigation
+
+**Owner:** Platform. Timeboxed to half a day. The result resolves decision D2 in `ROADMAP.md`.
+
+Add a per-user registry verb under `HKCU\Software\Classes\SystemFileAssociations\...\shell` that launches
+the built executable, with `MultiSelectModel` set. This code is temporary and is not included in the
+release.
+
+The investigation must answer:
+
+1. Where the entry appears on Windows 11 (primary menu or "Show more options").
+2. The measured time from invocation to a visible popup with one file and with twenty files.
+3. How many processes start for a twenty-file selection, and how many remain after the debounce.
+4. Whether `MultiSelectModel` limits the selection as expected.
+
+### Acceptance criteria
+
+- [ ] The four questions above are answered with numbers in `docs/PHASE_1_CLOSEOUT.md` or a short note
+      under `docs/`, and decision D2 is recorded.
+
+---
+
+## 9. Work breakdown
+
+| # | Task | Owner | Depends on | Estimate |
 |---|---|---|---|---|
-| 1 | `ConversionMatrix` + `FileCategory` mapping + tests | Core | — | 0.5 d |
-| 2 | `IConversionEngineRouter` + DI wiring + fake-engine tests | Core | 1 | 0.5 d |
-| 3 | `Engines.Images` Magick.NET engine (convert, AutoOrient, naming, cancel) | Image | 1 | 2 d |
-| 4 | Route popup + coordinator through the router; pre-flight validation | Core/UI | 2, 3 | 0.5 d |
-| 5 | IPC hardening + logging + global exception handlers | Platform | — | 1 d |
-| 6 | Popup unification + placement + mixed selection | UI | 4 | 1 d |
-| 7 | Theming/tray (optional, last) | UI | 6 | 0.5 d |
-| 8 | ~~CI + tests project~~ **done in Phase 1**; now: keep CI green and add a test with every task below | Platform | — | ongoing |
+| 1 | `ConversionMatrix`, file category mapping and tests | Core | none | 0.5 day |
+| 2 | `IConversionEngineRouter`, dependency injection and test double | Core | 1 | 0.5 day |
+| 3 | `Engines.Images` with Magick.NET: conversion, orientation, naming, cancellation | Image | 1 | 2 days |
+| 4 | Route the coordinator and popup through the router; add pre-flight validation | Core and Interface | 2, 3 | 0.5 day |
+| 5 | Launch path hardening, logging and global exception handling | Platform | none | 1 day |
+| 6 | Popup unification, placement and mixed-selection handling | Interface | 4 | 1 day |
+| 7 | Context menu investigation (timeboxed) | Platform | none | 0.5 day |
+| 8 | Theming and tray icon | Interface | 6 | 0.5 day |
 
-Tasks 1, 2, 5, 8 can run in parallel. Task 3 needs 1 only. **Do not start 7 before 4 and 6 are merged.**
+Tasks 1, 5 and 7 can run in parallel. Task 3 depends only on task 1. Task 8 starts only after tasks 4 and 6
+are merged. Keeping CI green and adding a test with each change is an ongoing responsibility for everyone,
+not a separate task.
 
 ---
 
-## 8. PR / review checklist (every Phase 2 PR)
+## 10. Pull request checklist
 
-- [ ] One concern per PR; subject prefixed `core:`, `img:`, `ui:`, `platform:`.
-- [ ] No new `PackageReference` without a licence note in the PR description (§5 of the audit).
-- [ ] New public API in Core = changes to `IConversionEngine`/`ConversionJob`/`ConversionOptions` → requires 3 approvals.
-- [ ] `dotnet build QuickConvert.sln -c Release` green (CI enforces).
-- [ ] If behaviour changed, a test changed with it.
-- [ ] No `catch { }` without a log line.
+Every Phase 2 pull request must satisfy the following.
+
+- [ ] One concern per pull request, with the subject prefixed `core:`, `img:`, `ui:` or `platform:`.
+- [ ] Any new package reference is accompanied by a licence, size and justification note.
+- [ ] Changes to `IConversionEngine`, `ConversionJob`, `ConversionOptions` or `IConversionEngineRouter`
+      have three approvals.
+- [ ] `dotnet build QuickConvert.sln -c Release` succeeds and CI is green.
+- [ ] Behaviour changes are covered by a test.
+- [ ] No empty `catch` block without a log entry.

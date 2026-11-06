@@ -108,11 +108,17 @@ public class FormatRegistryTests
 
         // Run it twice: a HashSet-backed implementation would be allowed to change order between runs,
         // which is what makes the pre-selected format in the popup jump around.
-        var first = FormatRegistry.GetCommonTargetFormats(["a.png", "b.jpg"]);
-        var second = FormatRegistry.GetCommonTargetFormats(["a.png", "b.jpg"]);
+        // Using b.bmp so that single[0] (".jpg") is a valid target for all files in the batch.
+        var first = FormatRegistry.GetCommonTargetFormats(["a.png", "b.bmp"]);
+        var second = FormatRegistry.GetCommonTargetFormats(["a.png", "b.bmp"]);
 
         Assert.Equal(first, second);
         Assert.Equal(single[0], first[0]);
+
+        // When a file in the selection excludes single[0] via self-target exclusion,
+        // verify the order of the remaining common targets still follows the first file's order.
+        var withJpg = FormatRegistry.GetCommonTargetFormats(["a.png", "b.jpg"]);
+        Assert.Equal(single.First(t => !t.Equals(".jpg", StringComparison.OrdinalIgnoreCase)), withJpg[0]);
     }
 
     [Fact]

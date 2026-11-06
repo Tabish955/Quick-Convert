@@ -16,7 +16,9 @@
 > in the repo. `dotnet build` / `dotnet test` still need one run on a Windows machine before Phase 2
 > starts — see `docs/PHASE_1_VERIFY_PROMPT.md`.
 >
-> Product-level plan, decision gates and risks live in `ROADMAP.md`. This file stays scoped to Phase 2 work.
+> Product-level plan, decision gates and risks live in `ROADMAP.md`. Verification status of Phase 1 (including
+> what is still unconfirmed: CI has never run, runtime scenarios untested) is in `docs/PHASE_1_CLOSEOUT.md`.
+> This file stays scoped to Phase 2 work.
 
 1. **Scope is ~25 essential formats**, not 300. JPG, PNG, WEBP, BMP, TIFF, GIF, MP4, MKV, WEBM, MP3, WAV, FLAC, AAC, OGG, M4A, PDF, TXT, MD, HTML, DOCX, CSV, JSON, ZIP, 7Z, TAR, GZ. E-book later.
 2. **RAR is extract-only.** `.rar` may appear as a *source*, never as a *target*. This is a licence obligation (unRAR restriction), not a preference. A unit test must enforce it.

@@ -4,6 +4,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using QuickConvert.Core.Interfaces;
 using QuickConvert.Core.Models;
 using QuickConvert.Core.Services;
 
@@ -12,10 +13,16 @@ namespace QuickConvert.UI.ViewModels;
 /// <summary>
 /// ViewModel driving the Main Full Dashboard.
 /// Manages batch queue, concurrency, drag-and-drop file ingestion, and batch settings.
+///
+/// Phase 2: the global format list is derived from the router (matrix ∩ engine capability)
+/// instead of a hardcoded sample list, enqueue-time rejections are surfaced, and
+/// AddFiles(IEnumerable<string>) is renamed to AddFilePaths so it no longer shadows the
+/// generated AddFilesCommand.
 /// </summary>
 public partial class MainDashboardViewModel : ObservableObject
 {
     private readonly BatchConversionCoordinator _coordinator;
+    private readonly IConversionEngineRouter _router;
 
     public ObservableCollection<ConversionJob> Jobs => _coordinator.Jobs;
 
@@ -46,25 +53,25 @@ public partial class MainDashboardViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedGlobalFormat = string.Empty;
 
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
+
     public ObservableCollection<string> AvailableGlobalFormats { get; } = new();
 
-    public MainDashboardViewModel(BatchConversionCoordinator coordinator)
+    public MainDashboardViewModel(BatchConversionCoordinator coordinator, IConversionEngineRouter router)
     {
         _coordinator = coordinator;
-
-        // Populate sample popular targets for global batch selector
-        foreach (var fmt in new[] { ".png", ".jpg", ".webp", ".pdf", ".mp4", ".mp3", ".docx", ".zip", ".xlsx" })
-        {
-            AvailableGlobalFormats.Add(fmt);
-        }
+        _router = router;
 
         _coordinator.StateChanged += OnCoordinatorStateChanged;
         _coordinator.BatchCompleted += OnBatchCompleted;
+        _coordinator.JobRejected += OnJobRejected;
 
         // Default output path to user's Downloads or Desktop
         var downloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
         OutputFolderPath = Directory.Exists(downloads) ? downloads : Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
+        RefreshGlobalFormats();
         UpdateState();
     }
 
@@ -78,6 +85,11 @@ public partial class MainDashboardViewModel : ObservableObject
         UpdateState();
     }
 
+    private void OnJobRejected(object? sender, RejectedFile rejected)
+    {
+        StatusMessage = rejected.Reason;
+    }
+
     private void UpdateState()
     {
         OverallProgress = _coordinator.OverallProgress;
@@ -85,6 +97,45 @@ public partial class MainDashboardViewModel : ObservableObject
         CompletedJobsCount = _coordinator.CompletedJobsCount;
         TotalJobsCount = _coordinator.TotalJobsCount;
         IsConverting = _coordinator.IsConverting;
+    }
+
+    /// <summary>
+    /// Recomputes the global target dropdown as the intersection of router-offered targets
+    /// across all queued jobs. Empty queue → sensible image defaults so the dropdown is
+    /// never populated with formats no engine can produce.
+    /// </summary>
+    private void RefreshGlobalFormats()
+    {
+        IReadOnlyList<string> common;
+        var pendingJobs = Jobs.Where(j => j.Status == ConversionStatus.Pending || j.Status == ConversionStatus.Queued).ToList();
+
+        if (pendingJobs.Count == 0)
+        {
+            common = _router.GetAvailableTargets(".jpg");
+        }
+        else
+        {
+            common = _router.GetAvailableTargets(pendingJobs[0].SourceExtension);
+            foreach (var job in pendingJobs.Skip(1))
+            {
+                common = common
+                    .Intersect(_router.GetAvailableTargets(job.SourceExtension), StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (common.Count == 0) break;
+            }
+        }
+
+        AvailableGlobalFormats.Clear();
+        foreach (var t in common)
+        {
+            AvailableGlobalFormats.Add(t);
+        }
+
+        if (AvailableGlobalFormats.Count > 0 &&
+            !AvailableGlobalFormats.Contains(SelectedGlobalFormat))
+        {
+            SelectedGlobalFormat = AvailableGlobalFormats[0];
+        }
     }
 
     partial void OnSelectedGlobalFormatChanged(string value)
@@ -100,10 +151,20 @@ public partial class MainDashboardViewModel : ObservableObject
 
     /// <summary>
     /// Ingests multiple files into the conversion queue (e.g. from Explorer or Drag-and-Drop).
+    /// Files the router cannot serve are refused before the queue and reported here.
     /// </summary>
-    public void AddFiles(IEnumerable<string> paths)
+    public void AddFilePaths(IEnumerable<string> paths)
     {
-        _coordinator.EnqueueFiles(paths, string.IsNullOrWhiteSpace(SelectedGlobalFormat) ? null : SelectedGlobalFormat);
+        var result = _coordinator.EnqueueFiles(
+            paths,
+            string.IsNullOrWhiteSpace(SelectedGlobalFormat) ? null : SelectedGlobalFormat);
+
+        if (result.Rejected.Count > 0)
+        {
+            StatusMessage = string.Join("  |  ", result.Rejected.Select(r => r.Reason));
+        }
+
+        RefreshGlobalFormats();
         UpdateState();
     }
 
@@ -122,7 +183,7 @@ public partial class MainDashboardViewModel : ObservableObject
 
         if (dialog.ShowDialog() == true)
         {
-            AddFiles(dialog.FileNames);
+            AddFilePaths(dialog.FileNames);
         }
     }
 

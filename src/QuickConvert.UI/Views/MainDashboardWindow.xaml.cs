@@ -21,7 +21,7 @@ public partial class MainDashboardWindow : FluentWindow
         {
             if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
             {
-                ViewModel.AddFiles(files);
+                ViewModel.AddFilePaths(files);
             }
         }
     }

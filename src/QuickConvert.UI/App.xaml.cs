@@ -5,6 +5,7 @@ using QuickConvert.Core.Interfaces;
 using QuickConvert.Core.Ipc;
 using QuickConvert.Core.Models;
 using QuickConvert.Core.Services;
+using QuickConvert.Engines.Images;
 using QuickConvert.UI.ViewModels;
 using QuickConvert.UI.Views;
 
@@ -63,8 +64,12 @@ public partial class App : Application
 
     private void ConfigureServices(IServiceCollection services)
     {
+        // Engines are registered as multiples; the router is the only way anything reaches them.
+        // Phase 3 adds: services.AddSingleton<IConversionEngine, FfmpegConversionEngine>();
+        services.AddSingleton<IConversionEngine, MagickImageConversionEngine>();
+        services.AddSingleton<IConversionEngineRouter, ConversionEngineRouter>();
+
         // Core Services
-        services.AddSingleton<IConversionEngine, MockConversionEngine>();
         services.AddSingleton<BatchConversionCoordinator>();
         services.AddSingleton(_pipeService!);
 
@@ -116,7 +121,7 @@ public partial class App : Application
 
         if (initialFiles != null)
         {
-            _activeDashboardWindow.ViewModel.AddFiles(initialFiles);
+            _activeDashboardWindow.ViewModel.AddFilePaths(initialFiles);
         }
 
         _activeDashboardWindow.Show();

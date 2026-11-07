@@ -1,9 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\QuickConvert.Core\QuickConvert.Core.csproj" />
     <ProjectReference Include="..\QuickConvert.Engines.Media\QuickConvert.Engines.Media.csproj" />
     <ProjectReference Include="..\QuickConvert.Engines.Docs\QuickConvert.Engines.Docs.csproj" />
+    <ProjectReference Include="..\QuickConvert.Engines.Images\QuickConvert.Engines.Images.csproj" />
   </ItemGroup>
 
   <ItemGroup>

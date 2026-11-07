@@ -11,12 +11,16 @@ namespace QuickConvert.UI.ViewModels;
 /// <summary>
 /// ViewModel driving the lightweight Convertio-style Quick Popup.
 /// Displays when user launches Quick Convert on files from Windows File Explorer.
+///
+/// Phase 2: all conversions go through the shared BatchConversionCoordinator (the same
+/// singleton the dashboard uses), so popup jobs run with full concurrency, share
+/// cancellation, and appear on the dashboard with the same job ids. The ViewModel never
+/// touches an IConversionEngine directly; the router gates what may even be offered.
 /// </summary>
 public partial class QuickPopupViewModel : ObservableObject
 {
-    private readonly IConversionEngine _engine;
     private readonly BatchConversionCoordinator _coordinator;
-    private CancellationTokenSource? _conversionCts;
+    private readonly IConversionEngineRouter _router;
 
     [ObservableProperty]
     private string _fileSummary = "No files selected";
@@ -51,6 +55,10 @@ public partial class QuickPopupViewModel : ObservableObject
     [ObservableProperty]
     private string? _lastOutputFilePath;
 
+    /// <summary>True when the selection has no convertible target (e.g. 5 JPGs + 1 ZIP). UI shows "Open Dashboard".</summary>
+    [ObservableProperty]
+    private bool _noCommonTarget;
+
     public ObservableCollection<string> AvailableTargetFormats { get; } = new();
     public ObservableCollection<string> SelectedFiles { get; } = new();
 
@@ -58,21 +66,24 @@ public partial class QuickPopupViewModel : ObservableObject
     public event Action? RequestClose;
     public event Action<IReadOnlyList<string>>? RequestOpenDashboard;
 
-    public QuickPopupViewModel(IConversionEngine engine, BatchConversionCoordinator coordinator)
+    public QuickPopupViewModel(BatchConversionCoordinator coordinator, IConversionEngineRouter router)
     {
-        _engine = engine;
         _coordinator = coordinator;
+        _router = router;
     }
 
     /// <summary>
     /// Loads incoming file paths from Windows File Explorer into the popup.
-    /// Analyzes extensions, finds common targets, and sets initial defaults.
+    /// Analyzes extensions, finds common targets via the router, and sets initial defaults.
+    /// Mixed selections with an empty intersection show an explicit message — never the
+    /// first file's target list.
     /// </summary>
     public void LoadFiles(IReadOnlyList<string> paths)
     {
         SelectedFiles.Clear();
         AvailableTargetFormats.Clear();
         ConversionCompleted = false;
+        NoCommonTarget = false;
         OverallProgress = 0;
         StatusMessage = "Ready";
 
@@ -100,7 +111,7 @@ public partial class QuickPopupViewModel : ObservableObject
             DetectedCategory = FormatRegistry.GetCategory(ext);
             FileSummary = $"{fi.Name} ({FormatBytes(fi.Length)})";
 
-            var targets = FormatRegistry.GetSupportedTargetFormats(ext);
+            var targets = _router.GetAvailableTargets(ext);
             foreach (var t in targets)
             {
                 AvailableTargetFormats.Add(t);
@@ -112,29 +123,27 @@ public partial class QuickPopupViewModel : ObservableObject
             DetectedCategory = FormatRegistry.GetCategory(firstExt);
             FileSummary = $"{FileCount} files selected ({DetectedCategory})";
 
-            var common = FormatRegistry.GetCommonTargetFormats(validPaths);
-            if (common.Count > 0)
+            // Common targets across ALL files, via the router: matrix ∩ engine capability.
+            var common = _router.GetAvailableTargets(firstExt);
+            foreach (var path in validPaths.Skip(1))
             {
-                foreach (var t in common)
-                {
-                    AvailableTargetFormats.Add(t);
-                }
+                var next = _router.GetAvailableTargets(Path.GetExtension(path));
+                common = common.Intersect(next, StringComparer.OrdinalIgnoreCase).ToList();
+                if (common.Count == 0) break;
             }
-            else
+
+            foreach (var t in common)
             {
-                // Fallback to category formats
-                var targets = FormatRegistry.GetSupportedTargetFormats(firstExt);
-                foreach (var t in targets)
-                {
-                    AvailableTargetFormats.Add(t);
-                }
+                AvailableTargetFormats.Add(t);
             }
         }
 
+        NoCommonTarget = AvailableTargetFormats.Count == 0;
         SelectedTargetFormat = AvailableTargetFormats.Count > 0 ? AvailableTargetFormats[0] : string.Empty;
-        StatusMessage = AvailableTargetFormats.Count > 0
-            ? $"Convert {FileCount} {(FileCount == 1 ? "file" : "files")} to {SelectedTargetFormat.ToUpperInvariant()}"
-            : "No compatible output format found";
+
+        StatusMessage = NoCommonTarget
+            ? "No common target format for this selection."
+            : $"Convert {FileCount} {(FileCount == 1 ? "file" : "files")} to {SelectedTargetFormat.ToUpperInvariant()}";
     }
 
     partial void OnSelectedTargetFormatChanged(string value)
@@ -146,21 +155,20 @@ public partial class QuickPopupViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Executes conversion for all selected files with progress reporting.
+    /// Enqueues all selected files on the shared coordinator and runs the batch.
+    /// Impossible conversions were already un-pickable; anything still rejected up front
+    /// (e.g. engine gap) is surfaced with its reason instead of failing silently.
     /// </summary>
     [RelayCommand]
     public async Task ConvertNowAsync()
     {
-        if (SelectedFiles.Count == 0 || string.IsNullOrWhiteSpace(SelectedTargetFormat))
+        if (SelectedFiles.Count == 0 || string.IsNullOrWhiteSpace(SelectedTargetFormat) || IsConverting)
             return;
 
         IsConverting = true;
         ConversionCompleted = false;
         OverallProgress = 0;
         StatusMessage = "Starting conversion...";
-
-        _conversionCts?.Dispose();
-        _conversionCts = new CancellationTokenSource();
 
         var options = new ConversionOptions
         {
@@ -169,44 +177,49 @@ public partial class QuickPopupViewModel : ObservableObject
             OverwriteExisting = OverwriteExisting
         };
 
-        try
+        var result = _coordinator.EnqueueFiles(SelectedFiles, SelectedTargetFormat);
+
+        if (result.Rejected.Count > 0)
         {
-            int total = SelectedFiles.Count;
-            int completedCount = 0;
-            string? lastOutput = null;
+            StatusMessage = string.Join("  |  ", result.Rejected.Select(r => r.Reason));
+        }
 
-            for (int i = 0; i < total; i++)
+        if (result.Added.Count == 0)
+        {
+            IsConverting = false;
+            return;
+        }
+
+        var total = result.Added.Count;
+        var completed = 0;
+        var failed = 0;
+
+        void OnJobCompleted(object? sender, ConversionJob job)
+        {
+            if (job.Status == ConversionStatus.Completed)
             {
-                _conversionCts.Token.ThrowIfCancellationRequested();
-
-                var filePath = SelectedFiles[i];
-                var job = ConversionJob.FromFilePath(filePath, SelectedTargetFormat);
-                job.Category = DetectedCategory;
-
-                var progress = new Progress<double>(p =>
-                {
-                    double fileShare = 100.0 / total;
-                    double currentTotal = (completedCount * fileShare) + (p * fileShare / 100.0);
-                    OverallProgress = Math.Round(currentTotal, 1);
-                    StatusMessage = $"Converting file {i + 1} of {total} ({OverallProgress:0}%)...";
-                });
-
-                var result = await _engine.ConvertAsync(job, options, progress, _conversionCts.Token);
-                if (result.Success)
-                {
-                    completedCount++;
-                    lastOutput = result.OutputFilePath;
-                }
+                completed++;
+                LastOutputFilePath = job.OutputFilePath;
+            }
+            else if (job.Status == ConversionStatus.Failed)
+            {
+                failed++;
             }
 
-            LastOutputFilePath = lastOutput;
-            OverallProgress = 100;
-            ConversionCompleted = true;
-            StatusMessage = $"Converted {completedCount} of {total} successfully!";
+            OverallProgress = _coordinator.OverallProgress;
+            StatusMessage = $"Converting... {completed + failed} of {total} done";
         }
-        catch (OperationCanceledException)
+
+        _coordinator.JobCompleted += OnJobCompleted;
+        try
         {
-            StatusMessage = "Conversion was cancelled.";
+            await _coordinator.StartAllAsync(options);
+
+            OverallProgress = 100;
+            ConversionCompleted = failed == 0;
+            StatusMessage = failed == 0
+                ? $"Converted {completed} of {total} successfully!"
+                : $"Finished: {completed} succeeded, {failed} failed.";
         }
         catch (Exception ex)
         {
@@ -214,17 +227,18 @@ public partial class QuickPopupViewModel : ObservableObject
         }
         finally
         {
+            _coordinator.JobCompleted -= OnJobCompleted;
             IsConverting = false;
         }
     }
 
     /// <summary>
-    /// Cancels active conversion.
+    /// Cancels the active batch through the coordinator (shared with the dashboard).
     /// </summary>
     [RelayCommand]
     public void CancelConversion()
     {
-        _conversionCts?.Cancel();
+        _coordinator.CancelAll();
         IsConverting = false;
         StatusMessage = "Cancelled";
     }

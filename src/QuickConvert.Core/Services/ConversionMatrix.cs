@@ -2,7 +2,7 @@ namespace QuickConvert.Core.Services;
 
 /// <summary>
 /// Single source of truth for what may convert to what. Product scope lives here and only here;
-/// FormatRegistry delegates to this table. Copied from PHASE_2_SPEC.md §2.
+/// FormatRegistry delegates to this table. Copied from PHASE_2_SPEC.md §3.
 /// </summary>
 public static class ConversionMatrix
 {

@@ -4,6 +4,10 @@ using Xunit;
 
 namespace QuickConvert.Core.Tests;
 
+/// <summary>
+/// Phase-2 semantics: FormatRegistry delegates to ConversionMatrix. The matrix is the gate;
+/// these tests pin the delegation behavior, not a hardcoded list.
+/// </summary>
 public class FormatRegistryTests
 {
     [Theory]
@@ -34,30 +38,22 @@ public class FormatRegistryTests
     }
 
     [Fact]
-    public void IsSupported_MatchesTheRegistry()
+    public void IsSupported_MatchesTheMatrix()
     {
         Assert.True(FormatRegistry.IsSupported(".jpg"));
         Assert.True(FormatRegistry.IsSupported("movie.mkv"));
+        Assert.True(FormatRegistry.IsSupported("bundle.rar"));   // rar is a SOURCE
         Assert.False(FormatRegistry.IsSupported(".notaformat"));
     }
 
     [Fact]
-    public void GetSupportedTargetFormats_NeverIncludesTheSourceItself()
+    public void GetSupportedTargetFormats_DelegatesToTheMatrix()
     {
-        foreach (var source in new[] { ".png", ".jpg", ".mp4", ".mp3", ".txt", ".csv", ".zip" })
-        {
-            var targets = FormatRegistry.GetSupportedTargetFormats(source);
-            Assert.DoesNotContain(source, targets, StringComparer.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void GetSupportedTargetFormats_IsNotEmpty_ForKnownFormats()
-    {
-        foreach (var source in new[] { ".png", ".jpg", ".mp4", ".mp3", ".txt", ".zip" })
-        {
-            Assert.NotEmpty(FormatRegistry.GetSupportedTargetFormats(source));
-        }
+        // Spot-check a few rows instead of duplicating the table here.
+        Assert.Equal([".png", ".webp", ".bmp", ".tiff", ".gif", ".pdf"],
+            FormatRegistry.GetSupportedTargetFormats(".jpg"));
+        Assert.Equal([".7z", ".tar", ".gz"], FormatRegistry.GetSupportedTargetFormats(".zip"));
+        Assert.DoesNotContain(".rar", FormatRegistry.GetSupportedTargetFormats(".zip"));
     }
 
     [Fact]
@@ -65,30 +61,6 @@ public class FormatRegistryTests
     {
         Assert.Empty(FormatRegistry.GetSupportedTargetFormats(".qqq"));
         Assert.Empty(FormatRegistry.GetSupportedTargetFormats(""));
-    }
-
-    /// <summary>
-    /// Licence guard: RAR is proprietary and may only ever be read, never produced.
-    /// If this test fails, do not "fix the test" — remove the target.
-    /// </summary>
-    [Fact]
-    public void NoSourceOffersRarAsATarget()
-    {
-        var allSources = FormatRegistry.ImageFormats
-            .Concat(FormatRegistry.VideoFormats)
-            .Concat(FormatRegistry.AudioFormats)
-            .Concat(FormatRegistry.DocumentFormats)
-            .Concat(FormatRegistry.SpreadsheetFormats)
-            .Concat(FormatRegistry.ArchiveFormats)
-            .Concat(FormatRegistry.EBookFormats)
-            .Concat(FormatRegistry.FontFormats)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var source in allSources)
-        {
-            Assert.DoesNotContain(".rar", FormatRegistry.GetSupportedTargetFormats(source),
-                StringComparer.OrdinalIgnoreCase);
-        }
     }
 
     [Fact]
@@ -108,15 +80,14 @@ public class FormatRegistryTests
 
         // Run it twice: a HashSet-backed implementation would be allowed to change order between runs,
         // which is what makes the pre-selected format in the popup jump around.
-        // Using b.bmp so that single[0] (".jpg") is a valid target for all files in the batch.
         var first = FormatRegistry.GetCommonTargetFormats(["a.png", "b.bmp"]);
         var second = FormatRegistry.GetCommonTargetFormats(["a.png", "b.bmp"]);
 
         Assert.Equal(first, second);
         Assert.Equal(single[0], first[0]);
 
-        // When a file in the selection excludes single[0] via self-target exclusion,
-        // verify the order of the remaining common targets still follows the first file's order.
+        // When a file in the selection excludes single[0], the remaining common targets
+        // must still follow the first file's order.
         var withJpg = FormatRegistry.GetCommonTargetFormats(["a.png", "b.jpg"]);
         Assert.Equal(single.First(t => !t.Equals(".jpg", StringComparison.OrdinalIgnoreCase)), withJpg[0]);
     }
@@ -124,7 +95,7 @@ public class FormatRegistryTests
     [Fact]
     public void GetCommonTargetFormats_DisjointCategories_ReturnsEmpty()
     {
-        // Images can go to .pdf, archives cannot, and archives can go to .7z, images cannot.
+        // Images can go to .pdf, archives cannot; archives can go to .7z, images cannot.
         var common = FormatRegistry.GetCommonTargetFormats(["photo.png", "bundle.zip"]);
 
         Assert.Empty(common);

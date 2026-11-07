@@ -8,30 +8,16 @@ namespace QuickConvert.Core.Services;
 /// Mock conversion engine for Phase 1 and Phase 2 testing.
 /// Simulates a 2.5-second realistic conversion with 50ms incremental progress updates,
 /// cancellation support, and dummy output file generation.
+/// Registered in NO shipping DI path; tests only.
 /// </summary>
 public class MockConversionEngine : IConversionEngine
 {
     public string EngineName => "QuickConvert Mock Engine";
 
-    private static readonly List<string> AllSupportedExtensions =
-    [
-        .. FormatRegistry.ImageFormats,
-        .. FormatRegistry.VideoFormats,
-        .. FormatRegistry.AudioFormats,
-        .. FormatRegistry.DocumentFormats,
-        .. FormatRegistry.SpreadsheetFormats,
-        .. FormatRegistry.ArchiveFormats,
-        .. FormatRegistry.EBookFormats,
-        .. FormatRegistry.FontFormats
-    ];
+    public IReadOnlyList<string> SupportedSourceExtensions => ConversionMatrix.Sources;
 
-    public IReadOnlyList<string> SupportedSourceExtensions => AllSupportedExtensions;
-
-    public bool CanConvert(string sourceExt, string targetExt)
-    {
-        // Mock engine supports all registered formats
-        return FormatRegistry.IsSupported(sourceExt);
-    }
+    public bool CanConvert(string sourceExt, string targetExt) =>
+        ConversionMatrix.IsAllowed(sourceExt, targetExt);
 
     public async Task<ConversionResult> ConvertAsync(
         ConversionJob job,
@@ -81,7 +67,7 @@ public class MockConversionEngine : IConversionEngine
                 var counter = 1;
                 while (File.Exists(destinationFilePath))
                 {
-                    destinationFilePath = Path.Combine(outDir, $"{baseName}_{counter}{targetExt}");
+                    destinationFilePath = Path.Combine(outDir, $"{baseName} ({counter}){targetExt}");
                     counter++;
                 }
             }

@@ -80,8 +80,16 @@ public class MagickImageConversionEngine : IConversionEngine
             ct.ThrowIfCancellationRequested();
             progress?.Report(85);
 
-            // Promote temporary file to final destination atomically
-            File.Move(tempPath, outputPath, overwrite: true);
+            // Promote the temporary file to its final name. Unless overwriting was requested this never
+            // clobbers a file that appeared after the name was chosen (e.g. a.jpg and a.png in one batch
+            // both converting to a.webp): it takes the next free "name (n)" instead.
+            outputPath = OutputPromotion.Promote(
+                tempPath,
+                outDir,
+                Path.GetFileNameWithoutExtension(job.InputFilePath),
+                targetExt,
+                outputPath,
+                options.OverwriteExisting);
             tempPath = null; // disarmed: final file should not be removed
 
             sw.Stop();

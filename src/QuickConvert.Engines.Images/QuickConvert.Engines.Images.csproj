@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    Magick.NET-Q8-AnyCPU — Apache-2.0 managed wrapper over ImageMagick.
+    Adds a large native payload (installer size budget check before Phase 5, per ROADMAP §5).
+    Q8 chosen over Q16 for size; AnyCPU so the app stays architecture-neutral.
+    NOTE: verify the version below is the latest stable before merging (dotnet list package -outdated).
+  -->
+  <ItemGroup>
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.2" />
+    <ProjectReference Include="..\QuickConvert.Core\QuickConvert.Core.csproj" />
+  </ItemGroup>
+
+</Project>

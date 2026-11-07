@@ -193,11 +193,15 @@ public class BatchConversionCoordinator
 
             // The enqueue-time gate makes this unreachable in practice; it stays as a
             // fail-fast guard so a job can never reach an engine the router cannot serve.
-            var engine = _router.Resolve(job.SourceExtension, job.TargetExtension);
+            var effectiveTarget = options != null && !string.IsNullOrWhiteSpace(options.TargetExtension)
+                ? options.TargetExtension
+                : job.TargetExtension;
+
+            var engine = _router.Resolve(job.SourceExtension, effectiveTarget);
             if (engine is null)
             {
                 job.Status = ConversionStatus.Failed;
-                job.ErrorMessage = $"{job.SourceExtension} → {job.TargetExtension} is not supported.";
+                job.ErrorMessage = $"{job.SourceExtension} → {effectiveTarget} is not supported.";
                 job.StatusText = "Failed";
                 Dispatch(() =>
                 {
@@ -209,14 +213,17 @@ public class BatchConversionCoordinator
 
             var jobOptions = options ?? new ConversionOptions
             {
-                TargetExtension = job.TargetExtension,
+                TargetExtension = effectiveTarget,
                 Quality = 85
             };
+
+            job.TargetExtension = effectiveTarget;
 
             // Ensure job's specific target format is respected if options has blank target
             if (string.IsNullOrWhiteSpace(jobOptions.TargetExtension) && !string.IsNullOrWhiteSpace(job.TargetExtension))
             {
-                jobOptions = jobOptions with { TargetExtension = job.TargetExtension };
+                jobOptions = jobOptions with { TargetExtension = effectiveTarget };
+
             }
 
             var progress = new Progress<double>(p =>

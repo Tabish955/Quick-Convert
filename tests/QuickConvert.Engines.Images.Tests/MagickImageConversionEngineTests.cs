@@ -89,6 +89,27 @@ public class MagickImageConversionEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task CancelledOverwrite_PreservesExistingDestinationFile()
+    {
+        var src = MakeSource("preserve_test.png");
+        var existingOutput = Path.Combine(_dir, "preserve_test.jpg");
+        await File.WriteAllTextAsync(existingOutput, "original content");
+
+        var engine = new MagickImageConversionEngine();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var result = await engine.ConvertAsync(
+            ConversionJob.FromFilePath(src, ".jpg"),
+            new ConversionOptions { TargetExtension = ".jpg", OverwriteExisting = true },
+            progress: null, cts.Token);
+
+        Assert.False(result.Success);
+        Assert.True(File.Exists(existingOutput));
+        Assert.Equal("original content", await File.ReadAllTextAsync(existingOutput));
+    }
+
+    [Fact]
     public async Task UnreadableSource_ReturnsFailedResult_NotException()
     {
         var engine = new MagickImageConversionEngine();

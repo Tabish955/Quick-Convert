@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,9 +62,16 @@ public partial class App : Application
                         break;
                     case FileSendResult.Failed:
                         QuickConvertLogger.Error("Secondary instance could not reach the primary; file selection was not delivered.");
-                        MessageBox.Show(
-                            "QuickConvert is starting… your files will be picked up shortly. If this keeps happening, start QuickConvert once from the Start menu and try again.",
+                        bool createdNew;
+                        using (var failureMutex = new Mutex(initiallyOwned: true, @"Local\QuickConvert_HandshakeFailureShown", out createdNew))
+                        {
+                            if (createdNew)
+                            {
+                                MessageBox.Show(
+                            "QuickConvert could not hand your files to the running window. Open QuickConvert once from the Start menu and try again.",
                             "QuickConvert", MessageBoxButton.OK, MessageBoxImage.Information);
+                            }
+                        }
                         break;
                 }
 

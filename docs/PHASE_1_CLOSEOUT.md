@@ -62,9 +62,12 @@ real repo `pull_request: [main]` is enough, and pushes to short-lived branches j
 
 1. **CI verification:**
    - [x] Workflow `.github/workflows/ci.yml` exists and targets `windows-latest` with build + test.
-   - [ ] **PENDING (repo owner, ~2 min):** GitHub Actions must be enabled in the repo and one run verified green.
-         Steps: repo -> **Settings -> Actions -> General -> Allow all actions** (or the org default) -> save.
-         Then trigger or push a commit and confirm a green tick. Until this box is checked, GitHub reports `HTTP 422: Actions has been disabled for this user`.
+   - [ ] **PENDING (repo owner):** one workflow run must complete green.
+         GitHub currently answers `HTTP 422: Actions has been disabled for this user` for this repository.
+         That message concerns the account, not the repository, so **Settings -> Actions -> General** on its own
+         will not clear it. Check the account state first (github.com/settings/billing, and any verification
+         notice on the account), and contact GitHub Support if the account is in order. Once Actions is
+         available, re-run the workflow and tick this box.
 2. **The WPF app runtime scenarios:** Proven on Windows (see verification below).
 
 ---

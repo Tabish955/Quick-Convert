@@ -23,9 +23,11 @@ $verb = "HKCU:\Software\Classes\SystemFileAssociations\.jpg\shell\QuickConvert"
 New-Item -Path $verb -Force | Out-Null
 Set-ItemProperty -Path $verb -Name "(Default)" -Value "Convert with QuickConvert"
 
-# "Player" = Explorer passes selected files in a single process launch, capped at 16 items by the Windows Shell.
-# Selections beyond 16 (e.g. 20 files) spawn a secondary process which QuickConvert's Named Pipe + 150 ms debounce absorbs into one batch.
-# Alternative for Phase 5 if needed: "Document" (cap 100).
+# MultiSelectModel controls whether the verb stays visible for large selections. Microsoft's verb selection
+# model table gives legacy command-line verbs a limit of 15 items under "Document" and 100 under "Player",
+# so Player is the higher limit. Do not switch to "Document" to raise the limit; it would hide the verb above 15.
+# The command passes %1, so Explorer starts one process per selected file; the named pipe and the 150 ms
+# debounce in QuickConvert fold those launches into a single batch.
 Set-ItemProperty -Path $verb -Name "MultiSelectModel" -Value "Player"
 
 New-Item -Path "$verb\command" -Force | Out-Null

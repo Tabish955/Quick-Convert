@@ -10,9 +10,9 @@ namespace QuickConvert.Core.Tests;
 /// </summary>
 internal sealed class FakeConversionEngine : IConversionEngine
 {
-    public string EngineName => "Fake Engine (tests)";
+    public string EngineName => "Fake Conversion Engine";
 
-    public IReadOnlyList<string> SupportedSourceExtensions { get; } = [".png", ".jpg", ".txt", ".zip"];
+    public IReadOnlyList<string> SupportedSourceExtensions { get; } = [".png", ".jpg"];
 
     /// <summary>When true, ConvertAsync returns a failure result instead of a success.</summary>
     public bool FailConversions { get; set; }
@@ -20,7 +20,12 @@ internal sealed class FakeConversionEngine : IConversionEngine
     /// <summary>When true, ConvertAsync blocks until the token is cancelled.</summary>
     public bool BlockUntilCancelled { get; set; }
 
-    public bool CanConvert(string sourceExt, string targetExt) => true;
+    public bool CanConvert(string sourceExt, string targetExt)
+    {
+        var s = Services.FormatRegistry.NormalizeExtension(sourceExt);
+        var t = Services.FormatRegistry.NormalizeExtension(targetExt);
+        return (s is ".png" or ".jpg") && (t is ".png" or ".jpg" or ".webp" or ".bmp" or ".tiff" or ".gif");
+    }
 
     public async Task<ConversionResult> ConvertAsync(
         ConversionJob job,
@@ -33,9 +38,8 @@ internal sealed class FakeConversionEngine : IConversionEngine
             await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
         }
 
-        progress?.Report(50);
-        job.ProgressPercentage = 50;
         progress?.Report(100);
+        job.ProgressPercentage = 100;
 
         var output = Path.ChangeExtension(job.InputFilePath, options.TargetExtension);
 

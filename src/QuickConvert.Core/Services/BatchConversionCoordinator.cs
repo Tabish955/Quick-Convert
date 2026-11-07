@@ -6,12 +6,21 @@ using QuickConvert.Core.Models;
 namespace QuickConvert.Core.Services;
 
 /// <summary>
+/// A file that was refused before reaching the queue, with a user-facing reason.
+/// </summary>
+public record RejectedFile(string FilePath, string Reason);
+
+/// <summary>Outcome of an enqueue call: jobs accepted into the queue, and files refused up front.</summary>
+public record EnqueueResult(IReadOnlyList<ConversionJob> Added, IReadOnlyList<RejectedFile> Rejected);
+
+/// <summary>
 /// Coordinates batch conversion operations, manages concurrency via SemaphoreSlim,
-/// tracks job states, and handles cancellation.
+/// tracks job states, and handles cancellation. All conversions are resolved through
+/// the IConversionEngineRouter; engines are never invoked directly from here.
 /// </summary>
 public class BatchConversionCoordinator
 {
-    private readonly IConversionEngine _engine;
+    private readonly IConversionEngineRouter _router;
     private readonly SemaphoreSlim _semaphore;
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _jobCts = new();
     private CancellationTokenSource? _batchCts;
@@ -47,11 +56,12 @@ public class BatchConversionCoordinator
 
     public event EventHandler? StateChanged;
     public event EventHandler<ConversionJob>? JobCompleted;
+    public event EventHandler<RejectedFile>? JobRejected;
     public event EventHandler? BatchCompleted;
 
-    public BatchConversionCoordinator(IConversionEngine? engine = null)
+    public BatchConversionCoordinator(IConversionEngineRouter router)
     {
-        _engine = engine ?? new MockConversionEngine();
+        _router = router;
         _concurrencyLimit = Math.Max(1, Environment.ProcessorCount / 2);
         _semaphore = new SemaphoreSlim(_concurrencyLimit, _concurrencyLimit);
         _syncContext = SynchronizationContext.Current;
@@ -60,10 +70,13 @@ public class BatchConversionCoordinator
     /// <summary>
     /// Enqueues multiple file paths into the batch queue.
     /// Infers file category, size, and sets recommended target format if not supplied.
+    /// Files whose conversion cannot be performed are refused BEFORE they reach the queue,
+    /// with a user-facing reason, instead of failing deep inside the pipeline.
     /// </summary>
-    public IReadOnlyList<ConversionJob> EnqueueFiles(IEnumerable<string> filePaths, string? defaultTargetExt = null)
+    public EnqueueResult EnqueueFiles(IEnumerable<string> filePaths, string? defaultTargetExt = null)
     {
         var addedJobs = new List<ConversionJob>();
+        var rejected = new List<RejectedFile>();
 
         foreach (var path in filePaths)
         {
@@ -84,8 +97,28 @@ public class BatchConversionCoordinator
 
             if (string.IsNullOrWhiteSpace(job.TargetExtension))
             {
-                var supported = FormatRegistry.GetSupportedTargetFormats(job.SourceExtension);
-                job.TargetExtension = supported.Count > 0 ? supported[0] : string.Empty;
+                var available = _router.GetAvailableTargets(job.SourceExtension);
+                if (available.Count == 0)
+                {
+                    var r = new RejectedFile(path, $"{job.SourceExtension} is not a supported conversion source.");
+                    rejected.Add(r);
+                    Dispatch(() => JobRejected?.Invoke(this, r));
+                    continue;
+                }
+                job.TargetExtension = available[0];
+            }
+
+            // Capability gate: the pair must be convertible before it reaches the queue.
+            if (_router.Resolve(job.SourceExtension, job.TargetExtension) is null)
+            {
+                var available = _router.GetAvailableTargets(job.SourceExtension);
+                var reason = available.Count == 0
+                    ? $"{job.SourceExtension} → {job.TargetExtension} is not supported."
+                    : $"{job.SourceExtension} → {job.TargetExtension} is not supported. Available targets: {string.Join(", ", available)}.";
+                var r = new RejectedFile(path, reason);
+                rejected.Add(r);
+                Dispatch(() => JobRejected?.Invoke(this, r));
+                continue;
             }
 
             // Hook property changed on job to trigger overall progress updates
@@ -103,7 +136,7 @@ public class BatchConversionCoordinator
         }
 
         Dispatch(() => StateChanged?.Invoke(this, EventArgs.Empty));
-        return addedJobs;
+        return new EnqueueResult(addedJobs, rejected);
     }
 
     /// <summary>
@@ -158,28 +191,54 @@ public class BatchConversionCoordinator
                 return;
             }
 
+            // The enqueue-time gate makes this unreachable in practice; it stays as a
+            // fail-fast guard so a job can never reach an engine the router cannot serve.
+            var effectiveTarget = options != null && !string.IsNullOrWhiteSpace(options.TargetExtension)
+                ? options.TargetExtension
+                : job.TargetExtension;
+
+            var engine = _router.Resolve(job.SourceExtension, effectiveTarget);
+            if (engine is null)
+            {
+                job.Status = ConversionStatus.Failed;
+                job.ErrorMessage = $"{job.SourceExtension} → {effectiveTarget} is not supported.";
+                job.StatusText = "Failed";
+                Dispatch(() =>
+                {
+                    JobCompleted?.Invoke(this, job);
+                    StateChanged?.Invoke(this, EventArgs.Empty);
+                });
+                return;
+            }
+
             var jobOptions = options ?? new ConversionOptions
             {
-                TargetExtension = job.TargetExtension,
+                TargetExtension = effectiveTarget,
                 Quality = 85
             };
+
+            job.TargetExtension = effectiveTarget;
 
             // Ensure job's specific target format is respected if options has blank target
             if (string.IsNullOrWhiteSpace(jobOptions.TargetExtension) && !string.IsNullOrWhiteSpace(job.TargetExtension))
             {
-                jobOptions = jobOptions with { TargetExtension = job.TargetExtension };
+                jobOptions = jobOptions with { TargetExtension = effectiveTarget };
+
             }
 
             var progress = new Progress<double>(p =>
             {
                 Dispatch(() =>
                 {
-                    job.ProgressPercentage = p;
-                    StateChanged?.Invoke(this, EventArgs.Empty);
+                    if (job.Status == ConversionStatus.Converting)
+                    {
+                        job.ProgressPercentage = p;
+                        StateChanged?.Invoke(this, EventArgs.Empty);
+                    }
                 });
             });
 
-            var result = await _engine.ConvertAsync(job, jobOptions, progress, jobCts.Token);
+            var result = await engine.ConvertAsync(job, jobOptions, progress, jobCts.Token);
 
             Dispatch(() =>
             {

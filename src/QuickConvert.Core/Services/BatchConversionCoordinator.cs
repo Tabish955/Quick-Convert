@@ -26,8 +26,14 @@ public class BatchConversionCoordinator
     private CancellationTokenSource? _batchCts;
     private readonly SynchronizationContext? _syncContext;
 
-    private int _concurrencyLimit;
+    private readonly int _concurrencyLimit;
     private bool _isConverting;
+
+    /// <summary>
+    /// How many conversions may run at the same time. Defaults to half the logical processors
+    /// (at least 1) unless a value was passed to the constructor.
+    /// </summary>
+    public int MaxDegreeOfParallelism => _concurrencyLimit;
 
     public ObservableCollection<ConversionJob> Jobs { get; } = new();
 
@@ -59,10 +65,22 @@ public class BatchConversionCoordinator
     public event EventHandler<RejectedFile>? JobRejected;
     public event EventHandler? BatchCompleted;
 
-    public BatchConversionCoordinator(IConversionEngineRouter router)
+    /// <param name="router">Resolves which engine performs each conversion.</param>
+    /// <param name="maxDegreeOfParallelism">
+    /// Optional cap on simultaneous conversions (must be at least 1). Leave it out for the default of
+    /// half the logical processors. Making it injectable lets tests assert the configured degree
+    /// without relying on timing.
+    /// </param>
+    public BatchConversionCoordinator(IConversionEngineRouter router, int? maxDegreeOfParallelism = null)
     {
+        if (maxDegreeOfParallelism is < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxDegreeOfParallelism), maxDegreeOfParallelism, "At least one conversion must be allowed to run.");
+        }
+
         _router = router;
-        _concurrencyLimit = Math.Max(1, Environment.ProcessorCount / 2);
+        _concurrencyLimit = maxDegreeOfParallelism ?? Math.Max(1, Environment.ProcessorCount / 2);
         _semaphore = new SemaphoreSlim(_concurrencyLimit, _concurrencyLimit);
         _syncContext = SynchronizationContext.Current;
     }

@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\QuickConvert.Core\QuickConvert.Core.csproj" />
+    <ProjectReference Include="..\..\src\QuickConvert.Engines.Images\QuickConvert.Engines.Images.csproj" />
     <ProjectReference Include="..\..\src\QuickConvert.Engines.Media\QuickConvert.Engines.Media.csproj" />
   </ItemGroup>
 

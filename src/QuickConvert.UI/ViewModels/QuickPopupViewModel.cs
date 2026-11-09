@@ -142,7 +142,9 @@ public partial class QuickPopupViewModel : ObservableObject
         SelectedTargetFormat = AvailableTargetFormats.Count > 0 ? AvailableTargetFormats[0] : string.Empty;
 
         StatusMessage = NoCommonTarget
-            ? "No common target format for this selection."
+            ? ((DetectedCategory == FileCategory.Audio || DetectedCategory == FileCategory.Video)
+                ? "FFmpeg is required for audio/video conversions. Run tools/Get-Ffmpeg.ps1 to install it."
+                : "No common target format for this selection.")
             : $"Convert {FileCount} {(FileCount == 1 ? "file" : "files")} to {SelectedTargetFormat.ToUpperInvariant()}";
     }
 

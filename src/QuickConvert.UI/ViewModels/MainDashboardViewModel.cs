@@ -161,7 +161,15 @@ public partial class MainDashboardViewModel : ObservableObject
 
         if (result.Rejected.Count > 0)
         {
-            StatusMessage = string.Join("  |  ", result.Rejected.Select(r => r.Reason));
+            var hasMedia = result.Rejected.Any(r =>
+            {
+                var cat = FormatRegistry.GetCategory(Path.GetExtension(r.FilePath));
+                return cat is FileCategory.Audio or FileCategory.Video;
+            });
+
+            StatusMessage = (hasMedia && !_router.GetAvailableTargets(".mp4").Any())
+                ? "FFmpeg is required for audio and video conversions. Run tools/Get-Ffmpeg.ps1 to install it."
+                : string.Join("  |  ", result.Rejected.Select(r => r.Reason));
         }
 
         RefreshGlobalFormats();

@@ -9,6 +9,7 @@ using QuickConvert.Core.Ipc;
 using QuickConvert.Core.Models;
 using QuickConvert.Core.Services;
 using QuickConvert.Engines.Images;
+using QuickConvert.Engines.Media;
 using QuickConvert.UI.ViewModels;
 using QuickConvert.UI.Views;
 
@@ -117,7 +118,7 @@ public partial class App : Application
     private void ConfigureServices(IServiceCollection services)
     {
         // Engines are registered as multiples; the router is the only way anything reaches them.
-        // Phase 3 adds: services.AddSingleton<IConversionEngine, FfmpegConversionEngine>();
+        services.AddSingleton<IConversionEngine, FfmpegConversionEngine>();
         services.AddSingleton<IConversionEngine, MagickImageConversionEngine>();
         services.AddSingleton<IConversionEngineRouter, ConversionEngineRouter>();
 

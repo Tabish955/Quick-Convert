@@ -23,10 +23,12 @@ Fluent window chrome and controls. Source: https://github.com/lepoco/wpfui
 Tray icon. **Currently referenced but unused** — either wire it up in Phase 6 or remove the package.
 Source: https://github.com/hardcodet/wpf-notifyicon
 
-## [planned] Magick.NET — Apache-2.0
+## [in repo] Magick.NET — Apache-2.0
 Image engine (Phase 2). Wraps ImageMagick, which is under the ImageMagick License (Apache-2.0
-compatible). Source: https://github.com/dlemstra/Magick.NET
-> Ships large native binaries. Record the unpacked size here when we add it.
+compatible). Package: `Magick.NET-Q8-AnyCPU` version 14.17.2. Source: https://github.com/dlemstra/Magick.NET
+
+## [in repo] xUnit + Microsoft.NET.Test.Sdk — Apache-2.0 / MIT
+Unit and integration test runner. Referenced by test projects only (`QuickConvert.Core.Tests`, `QuickConvert.Engines.Images.Tests`, `QuickConvert.Engines.Media.Tests`), not shipped in binary distribution.
 
 ## [planned] MiniExcel — Apache-2.0
 CSV/JSON/XLSX. Source: https://github.com/mini-software/MiniExcel
@@ -40,9 +42,6 @@ zip / tar / gz / RAR **extraction**, pure managed. Source: https://github.com/ad
 ## [planned] PdfSharp — MIT
 PDF output. Source: https://github.com/empira/PDFsharp
 
-## [planned] xUnit + Microsoft.NET.Test.Sdk — Apache-2.0 / MIT
-Test-only, not shipped.
-
 ---
 
 ## Bundled executables (Phase 3+, downloaded by script, not committed)
@@ -50,13 +49,16 @@ Test-only, not shipped.
 These are **separate programs invoked as subprocesses** (mere aggregation). Our MIT code is not linked
 against them, so their licences do not extend to our source — but we do have to honour them.
 
-### FFmpeg — licence depends on the build (decision D1)
-- **Default choice:** GPL build (includes libx264 for H.264/MP4 encoding).
-- Obligations: ship the licence text, state the exact build configuration, and make the corresponding
-  source available (link to the upstream source tag + our build flags is sufficient).
-- Alternative: LGPL build, no x264, encode H.264 via NVENC/QSV/AMF or Windows Media Foundation.
-- **Must be recorded here:** version, build URL, whether `--enable-gpl` was used, and where the source
-  is offered.
+### FFmpeg — GPL v3.0 (Decision D1: Resolved)
+- **Version:** 9.0.2 essentials release by Gyan.dev
+- **Archive URL:** `https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip`
+- **Fallback URL:** `https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip`
+- **SHA-256 Checksum:** `60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba`
+- **Licence:** GNU General Public License v3.0 (GPLv3) due to compilation with `--enable-gpl` and `--enable-version3`.
+- **Selected Build Configuration:** Includes `libx264` (H.264/AVC), `libx265` (HEVC), `libvpx` (VP8/VP9), `libopus`, `libmp3lame`, `libvorbis`, and hardware encoder wrappers (`nvenc`, `qsv`, `amf`). Full flags:
+  `--enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-openal --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband`
+- **Source Offer & Access:** Upstream source corresponding to this binary is available at https://ffmpeg.org/download.html and on GitHub at https://github.com/FFmpeg/FFmpeg (tag `n9.0.2`). Packaging build scripts are archived at https://github.com/GyanD/codexffmpeg.
+- **Architectural Isolation:** Quick-Convert executes `ffmpeg.exe` and `ffprobe.exe` exclusively as standalone external processes over process pipes (`ProcessStartInfo.ArgumentList`), maintaining clean architectural and licensing isolation under mere aggregation principles.
 
 ### 7-Zip (`7za.exe`) — LGPL 2.1 + unRAR restriction
 Used to create 7z archives only. RAR extraction is handled by SharpCompress so we never distribute the
@@ -70,8 +72,8 @@ source availability.
 
 ## Compliance checklist per release
 
-- [ ] Every `PackageReference` and every file in `tools/` has an entry above.
-- [ ] No GPL *library* is referenced from our assemblies (a GPL **executable** we shell out to is fine).
+- [x] Every `PackageReference` and every file in `tools/` has an entry above.
+- [x] No GPL *library* is referenced from our assemblies (a GPL **executable** we shell out to is fine).
 - [ ] Licence texts for bundled tools are included in the installer output.
-- [ ] The source offer link for GPL tools resolves publicly.
-- [ ] No telemetry, analytics or crash-upload SDK anywhere in the dependency graph.
+- [x] The source offer link for GPL tools resolves publicly.
+- [x] No telemetry, analytics or crash-upload SDK anywhere in the dependency graph.

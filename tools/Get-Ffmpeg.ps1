@@ -27,8 +27,8 @@ $ErrorActionPreference = 'Stop'
 
 $Version = "9.0.2"
 $ExpectedHash = "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba"
-$PrimaryUrl = "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-$Version-essentials_build.zip"
-$FallbackUrl = "https://github.com/GyanD/codexffmpeg/releases/download/$Version/ffmpeg-$Version-essentials_build.zip"
+$PrimaryUrl = "https://github.com/GyanD/codexffmpeg/releases/download/$Version/ffmpeg-$Version-essentials_build.zip"
+$FallbackUrl = "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-$Version-essentials_build.zip"
 
 if ([string]::IsNullOrWhiteSpace($DestinationDir)) {
     $DestinationDir = Join-Path $PSScriptRoot "ffmpeg\bin"
@@ -49,23 +49,42 @@ if (-not (Test-Path $DestinationDir)) {
     New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
 }
 
-$TempZip = Join-Path [System.IO.Path]::GetTempPath() "ffmpeg-$Version-essentials-$([Guid]::NewGuid().ToString('N')).zip"
-$TempExtract = Join-Path [System.IO.Path]::GetTempPath() "ffmpeg-$Version-extract-$([Guid]::NewGuid().ToString('N'))"
+$TempZip = Join-Path ([System.IO.Path]::GetTempPath()) "ffmpeg-$Version-essentials-$([Guid]::NewGuid().ToString('N')).zip"
+$TempExtract = Join-Path ([System.IO.Path]::GetTempPath()) "ffmpeg-$Version-extract-$([Guid]::NewGuid().ToString('N'))"
 
 try {
-    Write-Host "Downloading FFmpeg $Version..." -ForegroundColor Cyan
-    $downloadSuccess = $false
-
-    try {
-        Write-Host "Trying primary source: $PrimaryUrl"
-        Invoke-WebRequest -Uri $PrimaryUrl -OutFile $TempZip -UseBasicParsing
+    # Check if a previously verified download exists in temp
+    $existingTestZip = Join-Path ([System.IO.Path]::GetTempPath()) "test_ffmpeg.zip"
+    if ((Test-Path $existingTestZip) -and ((Get-FileHash -Path $existingTestZip -Algorithm SHA256).Hash.ToLowerInvariant() -eq $ExpectedHash.ToLowerInvariant())) {
+        Write-Host "Reusing cached verified package: $existingTestZip" -ForegroundColor Cyan
+        Copy-Item -Path $existingTestZip -Destination $TempZip -Force
         $downloadSuccess = $true
     }
-    catch {
-        Write-Warning "Primary download failed: $_"
-        Write-Host "Trying fallback source: $FallbackUrl"
-        Invoke-WebRequest -Uri $FallbackUrl -OutFile $TempZip -UseBasicParsing
-        $downloadSuccess = $true
+    else {
+        Write-Host "Downloading FFmpeg $Version..." -ForegroundColor Cyan
+        $downloadSuccess = $false
+        $urls = @($PrimaryUrl, $FallbackUrl)
+
+        foreach ($url in $urls) {
+            try {
+                Write-Host "Trying source: $url"
+                if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+                    & curl.exe -L -f --connect-timeout 15 -o $TempZip $url
+                    if ($LASTEXITCODE -eq 0 -and (Test-Path $TempZip)) {
+                        $downloadSuccess = $true
+                        break
+                    }
+                }
+                Invoke-WebRequest -Uri $url -OutFile $TempZip -UseBasicParsing -TimeoutSec 60
+                if (Test-Path $TempZip) {
+                    $downloadSuccess = $true
+                    break
+                }
+            }
+            catch {
+                Write-Warning "Source download failed: $_"
+            }
+        }
     }
 
     if (-not $downloadSuccess -or -not (Test-Path $TempZip)) {

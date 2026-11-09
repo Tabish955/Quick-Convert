@@ -13,6 +13,8 @@ has completed yet.
 | #4 | Popup and dashboard routed through the coordinator, dropdowns derived from the router | `540c8d8` |
 | #5 | Named pipe hardening, rolling logger, global exception handlers, honest failure message | `be2a355` |
 | #6 | D2 shell spike script, spike results, close-out update | `1bdd837` |
+| #7 | Audit and documentation update | `d0ee189` |
+| #8 | Parallel conversion limit and atomic output promotion | `63d9347` |
 
 The six branches were stacked, so they were merged in order with merge commits. Nothing was squashed.
 

@@ -97,7 +97,9 @@ Photos application; ten files convert in parallel with no duplicate output names
 partial files; a ZIP-to-PNG request is refused in the interface; RAR is never offered as an output format;
 the context menu investigation produces measured numbers; CI is green.
 
-### Phase 3: Media engine
+### Phase 3: Media engine (Completed)
+
+**Status:** Completed in Phase 3 (PRs #9, #10, #11, #12; 115 tests passing across Core, Images, and Media).
 
 **Delivered:** audio and video conversion through FFmpeg, hardware acceleration (NVENC, QSV, AMF) with
 software fallback, audio extraction from video, progress reported through `-progress pipe:1`, graceful

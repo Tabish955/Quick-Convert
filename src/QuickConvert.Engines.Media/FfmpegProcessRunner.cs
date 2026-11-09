@@ -171,8 +171,8 @@ public class FfmpegProcessRunner : IFfmpegProcessRunner
                 if (idle > idleTimeout)
                 {
                     QuickConvertLogger.Warn($"FFmpegProcessRunner: idle timeout ({idle.TotalSeconds:F1}s > {idleTimeout.TotalSeconds:F1}s) reached for PID {process.Id}. Killing process tree.");
-                    KillProcessTree(process);
                     timeoutTcs.TrySetResult(true);
+                    KillProcessTree(process);
                     break;
                 }
             }
@@ -186,16 +186,16 @@ public class FfmpegProcessRunner : IFfmpegProcessRunner
 
             var finished = await Task.WhenAny(processExitTask, timeoutTcs.Task, cancellationTcs.Task).ConfigureAwait(false);
 
-            if (finished == cancellationTcs.Task)
+            if (timeoutTcs.Task.IsCompleted || finished == timeoutTcs.Task)
+            {
+                throw new TimeoutException($"Subprocess execution timed out after {idleTimeout.TotalSeconds:F1}s of inactivity without output.");
+            }
+
+            if (ct.IsCancellationRequested || finished == cancellationTcs.Task)
             {
                 QuickConvertLogger.Info($"FFmpegProcessRunner: cancellation requested for PID {process.Id}. Terminating process tree.");
                 KillProcessTree(process);
                 ct.ThrowIfCancellationRequested();
-            }
-
-            if (finished == timeoutTcs.Task)
-            {
-                throw new TimeoutException($"Subprocess execution timed out after {idleTimeout.TotalSeconds:F1}s of inactivity without output.");
             }
 
             await processExitTask.ConfigureAwait(false);

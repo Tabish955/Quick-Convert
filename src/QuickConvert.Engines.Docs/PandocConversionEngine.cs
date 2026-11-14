@@ -6,13 +6,14 @@ using QuickConvert.Engines.Docs.Tools;
 
 namespace QuickConvert.Engines.Docs;
 
-/// <summary>Documents (Pandoc, HTML path). Replaces DocsEngineStub.</summary>
+/// <summary>Documents (Pandoc, HTML path) and PDF output (Pandoc → HTML → wkhtmltopdf). Replaces DocsEngineStub.</summary>
 public sealed class PandocConversionEngine : IConversionEngine
 {
     private readonly DocumentConverter _converter;
 
     public PandocConversionEngine()
-        : this(new DocumentConverter(new ToolProcessRunner(), ToolVersions.PandocLocator().Locate)) { }
+        : this(new DocumentConverter(new ToolProcessRunner(),
+            ToolVersions.PandocLocator().Locate, ToolVersions.WkhtmltopdfLocator().Locate)) { }
 
     public PandocConversionEngine(DocumentConverter converter) => _converter = converter;
 

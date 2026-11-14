@@ -6,6 +6,7 @@ namespace QuickConvert.Engines.Docs.Tests;
 public class DocumentConverterTests
 {
     private const string Pandoc = @"C:\t\pandoc.exe";
+    private const string Wk = @"C:\t\wkhtmltopdf.exe";
 
     private static FakeRunner WritingRunner()
     {
@@ -68,6 +69,15 @@ public class DocumentConverterTests
         Assert.Contains("--wrap=none", withMedia);
     }
 
+    [Fact]
+    public void Wkhtmltopdf_args_allow_local_files_and_disable_scripts()
+    {
+        var a = PandocArgumentBuilder.BuildWkhtmltopdf("in.html", "out.pdf");
+        Assert.Contains("--enable-local-file-access", a);
+        Assert.Contains("--disable-javascript", a);
+        Assert.Equal("out.pdf", a[^1]);
+    }
+
     // ---- pair gating ----
 
     [Fact]
@@ -81,13 +91,22 @@ public class DocumentConverterTests
     }
 
     [Fact]
-    public void CanConvert_hides_targets_when_pandoc_is_missing()
+    public void CanConvert_hides_targets_when_tools_are_missing()
     {
-        var none = new DocumentConverter(new FakeRunner(), () => null);
+        var none = new DocumentConverter(new FakeRunner(), () => null, () => null);
         Assert.False(none.CanConvert(".docx", ".md"));
+        Assert.False(none.CanConvert(".docx", ".pdf"));
 
-        var pandocOnly = new DocumentConverter(new FakeRunner(), () => Pandoc);
+        var pandocOnly = new DocumentConverter(new FakeRunner(), () => Pandoc, () => null);
         Assert.True(pandocOnly.CanConvert(".docx", ".md"));
+        Assert.False(pandocOnly.CanConvert(".docx", ".pdf"));
+
+        var both = new DocumentConverter(new FakeRunner(), () => Pandoc, () => Wk);
+        Assert.True(both.CanConvert(".docx", ".pdf"));
+
+        var wkOnly = new DocumentConverter(new FakeRunner(), () => null, () => Wk);
+        Assert.True(wkOnly.CanConvert(".html", ".pdf"));
+        Assert.False(wkOnly.CanConvert(".md", ".pdf"));
     }
 
     // ---- conversion ----
@@ -96,7 +115,7 @@ public class DocumentConverterTests
     public async Task Missing_pandoc_is_a_clean_failure_with_install_hint()
     {
         using var t = new TempDir();
-        var c = new DocumentConverter(new FakeRunner(), () => null);
+        var c = new DocumentConverter(new FakeRunner(), () => null, () => null);
         var r = await c.ConvertAsync(new DocumentRequest(Source(t), ".md", t.Path, false), null, default);
         Assert.False(r.Success);
         Assert.Equal(DocumentConverter.PandocMissing, r.Message);
@@ -107,7 +126,7 @@ public class DocumentConverterTests
     {
         using var t = new TempDir();
         var runner = WritingRunner();
-        var c = new DocumentConverter(runner, () => Pandoc);
+        var c = new DocumentConverter(runner, () => Pandoc, () => null);
         var reported = new List<int>();
         var r = await c.ConvertAsync(new DocumentRequest(Source(t, "notes.rtf"), ".txt", t.Path, false),
             new SyncProgress(reported), default);
@@ -127,7 +146,7 @@ public class DocumentConverterTests
     {
         using var t = new TempDir();
         File.WriteAllText(t.Sub("notes.txt"), "mine");
-        var c = new DocumentConverter(WritingRunner(), () => Pandoc);
+        var c = new DocumentConverter(WritingRunner(), () => Pandoc, () => null);
         var r = await c.ConvertAsync(new DocumentRequest(Source(t, "notes.rtf"), ".txt", t.Path, false), null, default);
         Assert.Equal(t.Sub("notes (1).txt"), r.OutputPath);
         Assert.Equal("mine", File.ReadAllText(t.Sub("notes.txt")));
@@ -138,7 +157,7 @@ public class DocumentConverterTests
     {
         using var t = new TempDir();
         var runner = new FakeRunner { Behaviour = (_, _) => new ProcessResult(64, "pandoc: unknown reader") };
-        var c = new DocumentConverter(runner, () => Pandoc);
+        var c = new DocumentConverter(runner, () => Pandoc, () => null);
         var r = await c.ConvertAsync(new DocumentRequest(Source(t), ".md", t.Path, false), null, default);
         Assert.False(r.Success);
         Assert.Contains("unknown reader", r.Message);
@@ -153,10 +172,69 @@ public class DocumentConverterTests
         using var cts = new CancellationTokenSource();
         var runner = new FakeRunner();
         runner.OnRun = (_, a) => { File.WriteAllText(FakeRunner.OutputOf(a), "x"); cts.Cancel(); };
-        var c = new DocumentConverter(runner, () => Pandoc);
+        var c = new DocumentConverter(runner, () => Pandoc, () => null);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             c.ConvertAsync(new DocumentRequest(Source(t), ".md", t.Path, false), null, cts.Token));
         Assert.Empty(Directory.GetDirectories(t.Path, ".tmp_*"));
+    }
+
+    [Fact]
+    public async Task Pdf_pipeline_runs_pandoc_then_wkhtmltopdf_on_the_html_intermediate()
+    {
+        using var t = new TempDir();
+        var runner = WritingRunner();
+        var c = new DocumentConverter(runner, () => Pandoc, () => Wk);
+        var r = await c.ConvertAsync(new DocumentRequest(Source(t), ".pdf", t.Path, false), null, default);
+
+        Assert.True(r.Success, r.Message);
+        Assert.Equal(t.Sub("report.pdf"), r.OutputPath);
+        Assert.Equal(2, runner.Calls.Count);
+        Assert.Equal(Pandoc, runner.Calls[0].Exe);
+        Assert.Equal(Wk, runner.Calls[1].Exe);
+        var htmlArg = runner.Calls[1].Args[^2];
+        Assert.EndsWith("intermediate.html", htmlArg);
+        Assert.Contains("--embed-resources", runner.Calls[0].Args);
+        Assert.Empty(Directory.GetDirectories(t.Path, ".tmp_*"));
+    }
+
+    [Fact]
+    public async Task Html_to_pdf_skips_pandoc()
+    {
+        using var t = new TempDir();
+        var runner = WritingRunner();
+        var c = new DocumentConverter(runner, () => null, () => Wk);
+        var r = await c.ConvertAsync(new DocumentRequest(Source(t, "page.html"), ".pdf", t.Path, false), null, default);
+        Assert.True(r.Success, r.Message);
+        Assert.Single(runner.Calls);
+        Assert.Equal(Wk, runner.Calls[0].Exe);
+    }
+
+    [Fact]
+    public async Task Missing_wkhtmltopdf_is_a_clean_failure()
+    {
+        using var t = new TempDir();
+        var c = new DocumentConverter(new FakeRunner(), () => Pandoc, () => null);
+        var r = await c.ConvertAsync(new DocumentRequest(Source(t), ".pdf", t.Path, false), null, default);
+        Assert.False(r.Success);
+        Assert.Equal(DocumentConverter.WkhtmltopdfMissing, r.Message);
+    }
+
+    [Fact]
+    public async Task Wkhtmltopdf_exit_1_with_a_real_pdf_is_accepted_but_exit_1_without_one_is_not()
+    {
+        using var t = new TempDir();
+        var runner = new FakeRunner();
+        runner.OnRun = (exe, a) => { if (exe == Pandoc || exe == Wk) File.WriteAllText(FakeRunner.OutputOf(a), "x"); };
+        runner.Behaviour = (exe, _) => exe == Wk ? new ProcessResult(1, "load warning") : new ProcessResult(0, "");
+        var ok = await new DocumentConverter(runner, () => Pandoc, () => Wk)
+            .ConvertAsync(new DocumentRequest(Source(t), ".pdf", t.Path, false), null, default);
+        Assert.True(ok.Success, ok.Message);
+
+        var runner2 = new FakeRunner { Behaviour = (exe, _) => new ProcessResult(exe == Wk ? 1 : 0, "boom") };
+        runner2.OnRun = (exe, a) => { if (exe == Pandoc) File.WriteAllText(FakeRunner.OutputOf(a), "x"); };
+        var bad = await new DocumentConverter(runner2, () => Pandoc, () => Wk)
+            .ConvertAsync(new DocumentRequest(Source(t, "b.docx"), ".pdf", t.Path, false), null, default);
+        Assert.False(bad.Success);
     }
 
     [Fact]
@@ -173,7 +251,7 @@ public class DocumentConverterTests
             Directory.CreateDirectory(Path.Combine(wd, media, "media"));
             File.WriteAllText(Path.Combine(wd, media, "media", "image1.png"), "png");
         };
-        var r = await new DocumentConverter(runner, () => Pandoc)
+        var r = await new DocumentConverter(runner, () => Pandoc, () => null)
             .ConvertAsync(new DocumentRequest(Source(t), ".md", t.Path, false), null, default);
 
         Assert.True(r.Success, r.Message);
@@ -185,7 +263,7 @@ public class DocumentConverterTests
     public async Task Unsupported_pair_and_missing_source_fail_cleanly()
     {
         using var t = new TempDir();
-        var c = new DocumentConverter(new FakeRunner(), () => Pandoc);
+        var c = new DocumentConverter(new FakeRunner(), () => Pandoc, () => Wk);
         Assert.False((await c.ConvertAsync(new DocumentRequest(Source(t, "a.pdf"), ".txt", t.Path, false), null, default)).Success);
         Assert.False((await c.ConvertAsync(new DocumentRequest(t.Sub("ghost.docx"), ".md", t.Path, false), null, default)).Success);
     }

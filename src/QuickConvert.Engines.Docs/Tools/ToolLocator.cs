@@ -2,8 +2,8 @@ namespace QuickConvert.Engines.Docs.Tools;
 
 /// <summary>
 /// Three-tier lookup, same order as FfmpegLocator:
-/// 1) %LOCALAPPDATA%\QuickConvert\tools\<folder>\<version>\<exe>
-/// 2) <app dir>\tools\<folder>\<exe>
+/// 1) %LOCALAPPDATA%\QuickConvert\tools\&lt;folder&gt;\&lt;version&gt;\&lt;exe&gt;
+/// 2) &lt;app dir&gt;\tools\&lt;folder&gt;\&lt;exe&gt; or repository working directory
 /// 3) PATH. Never downloads anything.
 /// </summary>
 public sealed class ToolLocator
@@ -33,6 +33,13 @@ public sealed class ToolLocator
         if (!string.IsNullOrEmpty(_appBase))
         {
             var p = Path.Combine(_appBase, "tools", _folder, _exe);
+            if (_fileExists(p)) return p;
+        }
+
+        var cwd = Directory.GetCurrentDirectory();
+        if (!string.IsNullOrEmpty(cwd))
+        {
+            var p = Path.Combine(cwd, "tools", _folder, _exe);
             if (_fileExists(p)) return p;
         }
 

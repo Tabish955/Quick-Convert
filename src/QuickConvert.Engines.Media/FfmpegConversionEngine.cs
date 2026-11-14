@@ -13,8 +13,9 @@ namespace QuickConvert.Engines.Media;
 /// Converts between audio and video formats, probes stream durations, reports real-time progress,
 /// supports hardware encoding with automatic software fallback, and ensures safe atomic output promotion.
 /// </summary>
-public class FfmpegConversionEngine : IConversionEngine
+public class FfmpegConversionEngine : IConversionEngine, IConcurrencyAwareEngine
 {
+    public int RecommendedMaxDegreeOfParallelism => Math.Max(1, Environment.ProcessorCount / 4);
     private static readonly string[] Sources =
     [
         ".mp4", ".mkv", ".avi", ".mov", ".webm", ".wmv",
@@ -243,3 +244,4 @@ public class FfmpegConversionEngine : IConversionEngine
         catch { }
     }
 }
+

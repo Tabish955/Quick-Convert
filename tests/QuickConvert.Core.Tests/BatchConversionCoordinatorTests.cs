@@ -1,3 +1,4 @@
+using QuickConvert.Core.Interfaces;
 using QuickConvert.Core.Models;
 using QuickConvert.Core.Services;
 using Xunit;
@@ -177,5 +178,75 @@ public class BatchConversionCoordinatorTests
         Assert.Empty(result.Added);
         Assert.NotNull(seen);
         Assert.Equal(file.Path, seen!.FilePath);
+    }
+
+    [Fact]
+    public void EnqueueFiles_DirectoryInput_SetsSourceKindDirectory()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "qc_test_" + Guid.NewGuid());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var sut = new BatchConversionCoordinator(new ConversionEngineRouter([new FakeArchiveEngine()]));
+            var result = sut.EnqueueFiles([tempDir], ".zip");
+
+            var job = Assert.Single(result.Added);
+            Assert.Equal(JobEndpointKind.Directory, job.SourceKind);
+            Assert.Equal(JobEndpointKind.File, job.TargetKind);
+            Assert.Equal(".zip", job.TargetExtension);
+            Assert.Equal(FileCategory.Archive, job.Category);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir);
+        }
+    }
+
+    [Fact]
+    public void EnqueueFiles_ExtractArchive_SetsTargetKindDirectory()
+    {
+        using var zip = new TempFile(".zip");
+        var sut = new BatchConversionCoordinator(new ConversionEngineRouter([new FakeArchiveEngine()]));
+        var result = sut.EnqueueFiles([zip.Path], ConversionTargets.Extract);
+
+        var job = Assert.Single(result.Added);
+        Assert.Equal(JobEndpointKind.File, job.SourceKind);
+        Assert.Equal(JobEndpointKind.Directory, job.TargetKind);
+        Assert.Equal(ConversionTargets.Extract, job.TargetExtension);
+    }
+
+    [Fact]
+    public void EnqueueFiles_DirectorySource_RefusesRarTarget()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "qc_test_" + Guid.NewGuid());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var sut = new BatchConversionCoordinator(new ConversionEngineRouter([new FakeArchiveEngine()]));
+            var result = sut.EnqueueFiles([tempDir], ".rar");
+
+            Assert.Empty(result.Added);
+            var rejected = Assert.Single(result.Rejected);
+            Assert.Contains(".rar", rejected.Reason);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir);
+        }
+    }
+
+    private sealed class FakeArchiveEngine : IConversionEngine
+    {
+        public string EngineName => "FakeArchive";
+        public IReadOnlyList<string> SupportedSourceExtensions => [".zip", ".tar", ".gz", ".7z", ".rar"];
+        public bool CanConvert(string sourceExt, string targetExt)
+        {
+            if (targetExt == ConversionTargets.Extract) return SupportedSourceExtensions.Contains(sourceExt);
+            if (string.IsNullOrEmpty(sourceExt) || sourceExt == "<dir>") return targetExt is ".zip" or ".7z" or ".tar" or ".gz";
+            return false;
+        }
+        public Task<ConversionResult> ConvertAsync(ConversionJob job, ConversionOptions options,
+            IProgress<double>? progress, CancellationToken ct) =>
+            Task.FromResult(new ConversionResult(true, job.InputFilePath + "_out"));
     }
 }

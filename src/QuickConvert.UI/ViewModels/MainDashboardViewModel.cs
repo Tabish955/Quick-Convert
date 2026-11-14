@@ -115,11 +115,13 @@ public partial class MainDashboardViewModel : ObservableObject
         }
         else
         {
-            common = _router.GetAvailableTargets(pendingJobs[0].SourceExtension);
+            var firstExt = pendingJobs[0].SourceKind == JobEndpointKind.Directory ? string.Empty : pendingJobs[0].SourceExtension;
+            common = _router.GetAvailableTargets(firstExt);
             foreach (var job in pendingJobs.Skip(1))
             {
+                var nextExt = job.SourceKind == JobEndpointKind.Directory ? string.Empty : job.SourceExtension;
                 common = common
-                    .Intersect(_router.GetAvailableTargets(job.SourceExtension), StringComparer.OrdinalIgnoreCase)
+                    .Intersect(_router.GetAvailableTargets(nextExt), StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 if (common.Count == 0) break;
             }
@@ -150,7 +152,7 @@ public partial class MainDashboardViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Ingests multiple files into the conversion queue (e.g. from Explorer or Drag-and-Drop).
+    /// Ingests multiple files or folders into the conversion queue (e.g. from Explorer or Drag-and-Drop).
     /// Files the router cannot serve are refused before the queue and reported here.
     /// </summary>
     public void AddFilePaths(IEnumerable<string> paths)
@@ -273,6 +275,40 @@ public partial class MainDashboardViewModel : ObservableObject
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = OutputFolderPath,
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Reveals a completed conversion job in Windows File Explorer.
+    /// Opens the folder if the output is a directory (such as extracted archives),
+    /// or selects the file if it is an individual file.
+    /// </summary>
+    [RelayCommand]
+    public void RevealInExplorer(ConversionJob? job)
+    {
+        var path = job?.OutputFilePath;
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+            }
+            else if (File.Exists(path))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{path}\"",
                     UseShellExecute = true
                 });
             }

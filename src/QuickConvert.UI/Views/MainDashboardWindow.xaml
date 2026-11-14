@@ -66,8 +66,14 @@
                     <TextBlock Text="Batch Target: " VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/>
                     <ComboBox ItemsSource="{Binding AvailableGlobalFormats}"
                               SelectedItem="{Binding SelectedGlobalFormat}"
-                              Width="100"
-                              Height="34"/>
+                              Width="140"
+                              Height="34">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource TargetFormatDisplayConverter}}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
@@ -115,7 +121,7 @@
                 <DataGridTextColumn Header="File Name" Binding="{Binding FileName}" Width="2*" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Size" Binding="{Binding FormattedFileSize}" Width="90" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="100" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Target" Binding="{Binding TargetExtension}" Width="80"/>
+                <DataGridTextColumn Header="Target" Binding="{Binding TargetExtension, Converter={StaticResource TargetFormatDisplayConverter}}" Width="110" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="130" IsReadOnly="True"/>
 
                 <DataGridTemplateColumn Header="Progress" Width="1.5*">
@@ -133,10 +139,16 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Actions" Width="110">
+                <DataGridTemplateColumn Header="Actions" Width="130">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="📂"
+                                        ToolTip="Reveal in File Explorer"
+                                        Command="{Binding DataContext.RevealInExplorerCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"
+                                        Width="28" Height="26"
+                                        Margin="0,0,4,0"/>
                                 <Button Content="✕"
                                         ToolTip="Cancel Job"
                                         Command="{Binding DataContext.CancelJobCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"

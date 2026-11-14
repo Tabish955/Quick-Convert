@@ -73,7 +73,7 @@ public partial class QuickPopupViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Loads incoming file paths from Windows File Explorer into the popup.
+    /// Loads incoming file or folder paths from Windows File Explorer into the popup.
     /// Analyzes extensions, finds common targets via the router, and sets initial defaults.
     /// Mixed selections with an empty intersection show an explicit message — never the
     /// first file's target list.
@@ -87,10 +87,10 @@ public partial class QuickPopupViewModel : ObservableObject
         OverallProgress = 0;
         StatusMessage = "Ready";
 
-        var validPaths = paths.Where(File.Exists).ToList();
+        var validPaths = paths.Where(p => File.Exists(p) || Directory.Exists(p)).ToList();
         if (validPaths.Count == 0)
         {
-            FileSummary = "No valid files selected.";
+            FileSummary = "No valid files or folders selected.";
             FileCount = 0;
             DetectedCategory = FileCategory.Unknown;
             return;
@@ -105,29 +105,46 @@ public partial class QuickPopupViewModel : ObservableObject
 
         if (FileCount == 1)
         {
-            var singleFile = validPaths[0];
-            var ext = Path.GetExtension(singleFile);
-            var fi = new FileInfo(singleFile);
-            DetectedCategory = FormatRegistry.GetCategory(ext);
-            FileSummary = $"{fi.Name} ({FormatBytes(fi.Length)})";
-
-            var targets = _router.GetAvailableTargets(ext);
-            foreach (var t in targets)
+            var single = validPaths[0];
+            if (Directory.Exists(single))
             {
-                AvailableTargetFormats.Add(t);
+                var di = new DirectoryInfo(single);
+                DetectedCategory = FileCategory.Archive;
+                FileSummary = $"{di.Name} (Folder)";
+
+                var targets = _router.GetAvailableTargets(string.Empty);
+                foreach (var t in targets)
+                {
+                    AvailableTargetFormats.Add(t);
+                }
+            }
+            else
+            {
+                var ext = Path.GetExtension(single);
+                var fi = new FileInfo(single);
+                DetectedCategory = FormatRegistry.GetCategory(ext);
+                FileSummary = $"{fi.Name} ({FormatBytes(fi.Length)})";
+
+                var targets = _router.GetAvailableTargets(ext);
+                foreach (var t in targets)
+                {
+                    AvailableTargetFormats.Add(t);
+                }
             }
         }
         else
         {
-            var firstExt = Path.GetExtension(validPaths[0]);
-            DetectedCategory = FormatRegistry.GetCategory(firstExt);
-            FileSummary = $"{FileCount} files selected ({DetectedCategory})";
+            var firstIsFolder = Directory.Exists(validPaths[0]);
+            var firstExt = firstIsFolder ? string.Empty : Path.GetExtension(validPaths[0]);
+            DetectedCategory = firstIsFolder ? FileCategory.Archive : FormatRegistry.GetCategory(firstExt);
+            FileSummary = $"{FileCount} items selected";
 
-            // Common targets across ALL files, via the router: matrix ∩ engine capability.
+            // Common targets across ALL files/folders, via the router: matrix ∩ engine capability.
             var common = _router.GetAvailableTargets(firstExt);
             foreach (var path in validPaths.Skip(1))
             {
-                var next = _router.GetAvailableTargets(Path.GetExtension(path));
+                var nextExt = Directory.Exists(path) ? string.Empty : Path.GetExtension(path);
+                var next = _router.GetAvailableTargets(nextExt);
                 common = common.Intersect(next, StringComparer.OrdinalIgnoreCase).ToList();
                 if (common.Count == 0) break;
             }
@@ -141,18 +158,35 @@ public partial class QuickPopupViewModel : ObservableObject
         NoCommonTarget = AvailableTargetFormats.Count == 0;
         SelectedTargetFormat = AvailableTargetFormats.Count > 0 ? AvailableTargetFormats[0] : string.Empty;
 
-        StatusMessage = NoCommonTarget
-            ? ((DetectedCategory == FileCategory.Audio || DetectedCategory == FileCategory.Video)
+        UpdateStatusMessage();
+    }
+
+    private void UpdateStatusMessage()
+    {
+        if (NoCommonTarget)
+        {
+            StatusMessage = (DetectedCategory == FileCategory.Audio || DetectedCategory == FileCategory.Video)
                 ? "FFmpeg is required for audio/video conversions. Run tools/Get-Ffmpeg.ps1 to install it."
-                : "No common target format for this selection.")
-            : $"Convert {FileCount} {(FileCount == 1 ? "file" : "files")} to {SelectedTargetFormat.ToUpperInvariant()}";
+                : "No common target format for this selection.";
+            return;
+        }
+
+        if (SelectedTargetFormat == ConversionTargets.Extract)
+        {
+            StatusMessage = $"Extract {FileCount} {(FileCount == 1 ? "archive" : "archives")} to folder";
+        }
+        else
+        {
+            var targetDesc = SelectedTargetFormat.ToUpperInvariant();
+            StatusMessage = $"Convert {FileCount} {(FileCount == 1 ? "item" : "items")} to {targetDesc}";
+        }
     }
 
     partial void OnSelectedTargetFormatChanged(string value)
     {
         if (!string.IsNullOrWhiteSpace(value) && !IsConverting && !ConversionCompleted)
         {
-            StatusMessage = $"Convert {FileCount} {(FileCount == 1 ? "file" : "files")} to {value.ToUpperInvariant()}";
+            UpdateStatusMessage();
         }
     }
 
@@ -256,17 +290,38 @@ public partial class QuickPopupViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Opens the destination folder in Windows File Explorer.
+    /// Opens the destination folder in Windows File Explorer or selects the converted file.
     /// </summary>
     [RelayCommand]
     public void OpenOutputFolder()
     {
         try
         {
-            var folder = !string.IsNullOrWhiteSpace(LastOutputFilePath) && File.Exists(LastOutputFilePath)
-                ? Path.GetDirectoryName(LastOutputFilePath)
-                : (SelectedFiles.Count > 0 ? Path.GetDirectoryName(SelectedFiles[0]) : null);
+            var targetPath = LastOutputFilePath;
+            if (!string.IsNullOrWhiteSpace(targetPath))
+            {
+                if (Directory.Exists(targetPath))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = targetPath,
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+                else if (File.Exists(targetPath))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"/select,\"{targetPath}\"",
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+            }
 
+            var folder = SelectedFiles.Count > 0 ? Path.GetDirectoryName(SelectedFiles[0]) : null;
             if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

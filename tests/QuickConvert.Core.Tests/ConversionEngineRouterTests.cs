@@ -57,6 +57,45 @@ public class ConversionEngineRouterTests
         Assert.Empty(router.GetAvailableTargets(".jpg"));
     }
 
+    [Fact]
+    public void Resolve_ReservedTargetExtract_RoutesDirectlyToEngine()
+    {
+        var router = new ConversionEngineRouter([new FakeArchiveEngine()]);
+        var engine = router.Resolve(".zip", ConversionTargets.Extract);
+        Assert.NotNull(engine);
+        Assert.Equal("FakeArchive", engine.EngineName);
+    }
+
+    [Fact]
+    public void Resolve_DirectorySource_RoutesDirectlyToEngine()
+    {
+        var router = new ConversionEngineRouter([new FakeArchiveEngine()]);
+        var engine = router.Resolve("", ".zip");
+        Assert.NotNull(engine);
+        Assert.Equal("FakeArchive", engine.EngineName);
+
+        // Directory to rar must be refused
+        Assert.Null(router.Resolve("", ".rar"));
+    }
+
+    [Fact]
+    public void GetAvailableTargets_ExtractableArchive_IncludesExtractTarget()
+    {
+        var router = new ConversionEngineRouter([new FakeArchiveEngine()]);
+        var targets = router.GetAvailableTargets(".zip");
+        Assert.Contains(ConversionTargets.Extract, targets);
+    }
+
+    [Fact]
+    public void GetAvailableTargets_DirectorySource_ReturnsArchiveTargets()
+    {
+        var router = new ConversionEngineRouter([new FakeArchiveEngine()]);
+        var targets = router.GetAvailableTargets("");
+        Assert.Contains(".zip", targets);
+        Assert.Contains(".7z", targets);
+        Assert.DoesNotContain(".rar", targets);
+    }
+
     private sealed class NoOpEngine : IConversionEngine
     {
         public string EngineName => "No-op";
@@ -65,5 +104,20 @@ public class ConversionEngineRouterTests
         public Task<ConversionResult> ConvertAsync(ConversionJob job, ConversionOptions options,
             IProgress<double>? progress, CancellationToken ct) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class FakeArchiveEngine : IConversionEngine
+    {
+        public string EngineName => "FakeArchive";
+        public IReadOnlyList<string> SupportedSourceExtensions => [".zip", ".tar", ".gz", ".7z", ".rar"];
+        public bool CanConvert(string sourceExt, string targetExt)
+        {
+            if (targetExt == ConversionTargets.Extract) return SupportedSourceExtensions.Contains(sourceExt);
+            if (string.IsNullOrEmpty(sourceExt) || sourceExt == "<dir>") return targetExt is ".zip" or ".7z" or ".tar" or ".gz";
+            return false;
+        }
+        public Task<ConversionResult> ConvertAsync(ConversionJob job, ConversionOptions options,
+            IProgress<double>? progress, CancellationToken ct) =>
+            Task.FromResult(new ConversionResult(true, job.InputFilePath + "_out"));
     }
 }

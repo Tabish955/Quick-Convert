@@ -11,6 +11,7 @@
 
             <BooleanToVisibilityConverter x:Key="BoolToVis" />
             <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+            <converters:TargetFormatDisplayConverter x:Key="TargetFormatDisplayConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

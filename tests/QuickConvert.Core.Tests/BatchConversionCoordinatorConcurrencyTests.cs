@@ -82,6 +82,25 @@ public class BatchConversionCoordinatorConcurrencyTests
         finally { DisposeAll(files); }
     }
 
+    [Fact]
+    public async Task ConcurrencyAwareEngine_IsThrottledToRecommendedDegree()
+    {
+        var files = MakeFiles(4);
+        try
+        {
+            var engine = new ConcurrencyAwareProbeEngine(rendezvousCount: 1, maxParallelism: 1);
+            var sut = CreateSut(engine, degree: 4); // global limit 4, engine hint 1
+            sut.EnqueueFiles(files.Select(f => f.Path));
+
+            await sut.StartAllAsync(Options());
+
+            Assert.Equal(1, engine.Peak);
+            Assert.Equal(4, engine.Finished);
+            Assert.Equal(4, sut.CompletedJobsCount);
+        }
+        finally { DisposeAll(files); }
+    }
+
     /// <summary>
     /// Counts how many conversions are in flight. With rendezvousCount N, every job blocks until N jobs
     /// are in flight at once (10 s safety timeout), then holds its slot briefly so an illegal extra
@@ -98,6 +117,54 @@ public class BatchConversionCoordinatorConcurrencyTests
         public int Finished => Volatile.Read(ref _finished);
 
         public string EngineName => "Concurrency probe";
+        public IReadOnlyList<string> SupportedSourceExtensions { get; } = [".png"];
+
+        public bool CanConvert(string sourceExt, string targetExt) =>
+            FormatRegistry.NormalizeExtension(sourceExt) == ".png" &&
+            FormatRegistry.NormalizeExtension(targetExt) == ".jpg";
+
+        public async Task<ConversionResult> ConvertAsync(
+            ConversionJob job, ConversionOptions options, IProgress<double>? progress, CancellationToken ct)
+        {
+            var now = Interlocked.Increment(ref _current);
+            RaisePeak(now);
+            if (now >= rendezvousCount) _rendezvous.TrySetResult();
+
+            try
+            {
+                await _rendezvous.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+                await Task.Delay(25, ct);
+                Interlocked.Increment(ref _finished);
+                return new ConversionResult(true, Path.ChangeExtension(job.InputFilePath, ".jpg"));
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _current);
+            }
+        }
+
+        private void RaisePeak(int value)
+        {
+            int seen;
+            while (value > (seen = Volatile.Read(ref _peak)))
+            {
+                if (Interlocked.CompareExchange(ref _peak, value, seen) == seen) return;
+            }
+        }
+    }
+
+    private sealed class ConcurrencyAwareProbeEngine(int rendezvousCount, int maxParallelism) : IConversionEngine, IConcurrencyAwareEngine
+    {
+        public int RecommendedMaxDegreeOfParallelism => maxParallelism;
+        private readonly TaskCompletionSource _rendezvous = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _current;
+        private int _peak;
+        private int _finished;
+
+        public int Peak => Volatile.Read(ref _peak);
+        public int Finished => Volatile.Read(ref _finished);
+
+        public string EngineName => "Concurrency aware probe";
         public IReadOnlyList<string> SupportedSourceExtensions { get; } = [".png"];
 
         public bool CanConvert(string sourceExt, string targetExt) =>

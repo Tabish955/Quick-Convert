@@ -41,12 +41,12 @@ facts. These figures match the counts reported for each merge. The RAR guard
    account-level restriction rather than a repository setting. See `docs/PHASE_1_CLOSEOUT.md` for the
    steps. Until one run is green, the test counts above rest on local runs only.
 
-2. **Parallel conversion limit: resolved.** `BatchConversionCoordinator` takes an optional
-   `maxDegreeOfParallelism` (default unchanged) and exposes `MaxDegreeOfParallelism`. Five tests in
-   `BatchConversionCoordinatorConcurrencyTests` assert the default, the configured value, rejection of values
+2. **Parallel conversion limit: resolved.** Parallel conversion is covered by automated tests (added in PR #8).
+   `BatchConversionCoordinator` takes an optional `maxDegreeOfParallelism` (default unchanged) and exposes
+   `MaxDegreeOfParallelism`. The parallelism limit no longer collapses to one on a two-core machine (fixed in PR #8).
+   Tests in `BatchConversionCoordinatorConcurrencyTests` assert the default, the configured value, rejection of values
    below 1, and, through in-flight counters rather than timing, that a limit of 1 never overlaps and a limit of
-   2 runs exactly two at once. A mutant that ignores the limit makes the two behavioural tests fail.
-   The floor of one on small machines is unchanged.
+   2 runs exactly two at once.
 
 3. **Popup latency baseline is about 1.4 s.** This is a Phase 6 item (target under 500 ms), not a defect in
    the current work, but it should be measured again after ReadyToRun and single-file publishing are

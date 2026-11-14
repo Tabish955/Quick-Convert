@@ -22,6 +22,7 @@ public class BatchConversionCoordinator
 {
     private readonly IConversionEngineRouter _router;
     private readonly SemaphoreSlim _semaphore;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _engineSemaphores = new();
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _jobCts = new();
     private CancellationTokenSource? _batchCts;
     private readonly SynchronizationContext? _syncContext;
@@ -86,7 +87,7 @@ public class BatchConversionCoordinator
     }
 
     /// <summary>
-    /// Enqueues multiple file paths into the batch queue.
+    /// Enqueues multiple file or directory paths into the batch queue.
     /// Infers file category, size, and sets recommended target format if not supplied.
     /// Files whose conversion cannot be performed are refused BEFORE they reach the queue,
     /// with a user-facing reason, instead of failing deep inside the pipeline.
@@ -98,7 +99,7 @@ public class BatchConversionCoordinator
 
         foreach (var path in filePaths)
         {
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
                 continue;
 
             // Avoid duplicate path already pending, queued or actively converting
@@ -110,15 +111,27 @@ public class BatchConversionCoordinator
                 continue;
             }
 
-            var job = ConversionJob.FromFilePath(path, defaultTargetExt);
-            job.Category = FormatRegistry.GetCategory(job.SourceExtension);
+            var isDir = Directory.Exists(path);
+            var job = ConversionJob.FromPath(path, defaultTargetExt);
+
+            if (isDir)
+            {
+                job.Category = FileCategory.Archive;
+                job.SourceKind = JobEndpointKind.Directory;
+                job.TargetKind = JobEndpointKind.File;
+            }
+            else
+            {
+                job.Category = FormatRegistry.GetCategory(job.SourceExtension);
+            }
 
             if (string.IsNullOrWhiteSpace(job.TargetExtension))
             {
                 var available = _router.GetAvailableTargets(job.SourceExtension);
                 if (available.Count == 0)
                 {
-                    var r = new RejectedFile(path, $"{job.SourceExtension} is not a supported conversion source.");
+                    var sourceDesc = isDir ? "Directory" : job.SourceExtension;
+                    var r = new RejectedFile(path, $"{sourceDesc} is not a supported conversion source.");
                     rejected.Add(r);
                     Dispatch(() => JobRejected?.Invoke(this, r));
                     continue;
@@ -126,13 +139,24 @@ public class BatchConversionCoordinator
                 job.TargetExtension = available[0];
             }
 
+            // Gating: extract or compress or normal conversion
+            if (job.TargetExtension == ConversionTargets.Extract && !isDir)
+            {
+                job.TargetKind = JobEndpointKind.Directory;
+            }
+            else if (isDir)
+            {
+                job.SourceKind = JobEndpointKind.Directory;
+            }
+
             // Capability gate: the pair must be convertible before it reaches the queue.
             if (_router.Resolve(job.SourceExtension, job.TargetExtension) is null)
             {
                 var available = _router.GetAvailableTargets(job.SourceExtension);
+                var sourceDesc = isDir ? "Directory" : job.SourceExtension;
                 var reason = available.Count == 0
-                    ? $"{job.SourceExtension} → {job.TargetExtension} is not supported."
-                    : $"{job.SourceExtension} → {job.TargetExtension} is not supported. Available targets: {string.Join(", ", available)}.";
+                    ? $"{sourceDesc} → {job.TargetExtension} is not supported."
+                    : $"{sourceDesc} → {job.TargetExtension} is not supported. Available targets: {string.Join(", ", available)}.";
                 var r = new RejectedFile(path, reason);
                 rejected.Add(r);
                 Dispatch(() => JobRejected?.Invoke(this, r));
@@ -200,6 +224,9 @@ public class BatchConversionCoordinator
         _jobCts[job.Id] = jobCts;
 
         await _semaphore.WaitAsync(masterCt);
+        SemaphoreSlim? engineSem = null;
+        bool engineSemAcquired = false;
+
         try
         {
             if (jobCts.Token.IsCancellationRequested)
@@ -229,6 +256,15 @@ public class BatchConversionCoordinator
                 return;
             }
 
+            // Concurrency hint support: throttle engine if it requests lower parallelism than global
+            if (engine is IConcurrencyAwareEngine aware)
+            {
+                var limit = Math.Max(1, aware.RecommendedMaxDegreeOfParallelism);
+                engineSem = _engineSemaphores.GetOrAdd(engine.EngineName, _ => new SemaphoreSlim(limit, limit));
+                await engineSem.WaitAsync(jobCts.Token);
+                engineSemAcquired = true;
+            }
+
             var jobOptions = options ?? new ConversionOptions
             {
                 TargetExtension = effectiveTarget,
@@ -241,7 +277,6 @@ public class BatchConversionCoordinator
             if (string.IsNullOrWhiteSpace(jobOptions.TargetExtension) && !string.IsNullOrWhiteSpace(job.TargetExtension))
             {
                 jobOptions = jobOptions with { TargetExtension = effectiveTarget };
-
             }
 
             var progress = new Progress<double>(p =>
@@ -301,6 +336,10 @@ public class BatchConversionCoordinator
         }
         finally
         {
+            if (engineSemAcquired)
+            {
+                engineSem?.Release();
+            }
             _semaphore.Release();
             _jobCts.TryRemove(job.Id, out _);
         }

@@ -34,12 +34,13 @@ public static class FormatRegistry
 
     /// <summary>
     /// Normalizes extension string to lowercase with a leading dot.
-    /// Returns string.Empty if invalid.
+    /// Returns string.Empty if invalid. Reserved tokens (starting with #) and &lt;dir&gt; are preserved.
     /// </summary>
     public static string NormalizeExtension(string? extension)
     {
         if (string.IsNullOrWhiteSpace(extension)) return string.Empty;
         var trimmed = extension.Trim().ToLowerInvariant();
+        if (ConversionTargets.IsReserved(trimmed) || trimmed == "<dir>") return trimmed;
         return trimmed.StartsWith('.') ? trimmed : $".{trimmed}";
     }
 

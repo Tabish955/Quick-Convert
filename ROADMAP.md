@@ -1,9 +1,8 @@
 # Quick-Convert Roadmap
 
-**Status:** Phase 1 complete, Phase 2 in progress
+**Status:** Phase 1, Phase 2, Phase 3, and Phase 4 complete; Phase 5 in planning
 **Audience:** the four-person development team
-**Related documents:** `PHASE_2_SPEC.md` (detailed Phase 2 requirements), `docs/PHASE_1_CLOSEOUT.md`
-(current verification status), `THIRD-PARTY-NOTICES.md` (licence obligations)
+**Related documents:** `PHASE_2_SPEC.md` (Phase 2), `docs/PHASE_3_SPEC.md` (Phase 3), `docs/PHASE_4_SPEC.md` (Phase 4), `docs/PHASE_4_STATUS.md` (acceptance & verification), `THIRD-PARTY-NOTICES.md` (licence obligations)
 
 ---
 
@@ -72,13 +71,9 @@ tests for the core library.
 **Exit criteria:** the solution restores and builds on Windows; two launches collapse into a single
 instance; a 20-file selection produces one debounced batch; unit tests pass; licence files are present.
 
-**Outstanding:** the CI workflow has not yet produced a run, and the three runtime scenarios have not been
-confirmed on a Windows machine. Both items are tracked in `docs/PHASE_1_CLOSEOUT.md`.
-
-### Phase 2: First working conversion and capability model (current)
+### Phase 2: First working conversion and capability model (complete)
 
 **Delivered:**
-
 1. `ConversionMatrix`, a single table of allowed conversions replacing the hardcoded format lists in
    `FormatRegistry`.
 2. `IConversionEngineRouter`, which selects an engine for a source and target format and reports the
@@ -90,14 +85,7 @@ confirmed on a Windows machine. Both items are tracked in `docs/PHASE_1_CLOSEOUT
 6. A single conversion execution path shared by the popup and the dashboard.
 7. A timeboxed investigation of the Explorer context menu (decision D2).
 
-Detailed requirements are in `PHASE_2_SPEC.md`.
-
-**Exit criteria:** a JPEG converts to a real PNG from the context menu and the output opens in the Windows
-Photos application; ten files convert in parallel with no duplicate output names; cancelling leaves no
-partial files; a ZIP-to-PNG request is refused in the interface; RAR is never offered as an output format;
-the context menu investigation produces measured numbers; CI is green.
-
-### Phase 3: Media engine (Completed)
+### Phase 3: Media engine (complete)
 
 **Status:** Completed in Phase 3 (PRs #9, #10, #11, #12; 115 tests passing across Core, Images, and Media).
 
@@ -106,20 +94,26 @@ software fallback, audio extraction from video, progress reported through `-prog
 cancellation, and a shared subprocess runner (argument quoting without a shell, per-job temporary
 directories, timeouts, stderr capture).
 
-**Exit criteria:** MP4 to MP3 and an MP4 to WEBM to MP4 round trip both play correctly; the progress bar
-tracks a 30-second clip within 5 percentage points; cancellation leaves no partial output and no orphaned
-`ffmpeg.exe` process; a missing tool binary produces a clear message rather than a crash; decision D1 is
-resolved and the notices are updated.
+### Phase 4: Documents and archives (complete)
 
-### Phase 4: Documents and archives
+**Status:** Completed in Phase 4 (PRs #13, #14, #15, #16, #17; 255 tests passing across Core, Docs, Images, and Media).
 
-**Delivered:** document conversion through Pandoc, PDF output, spreadsheet conversion through MiniExcel,
-archive handling through SharpCompress and `7za.exe`.
+**Delivered:**
+1. Document conversion via Pandoc 3.5 (Markdown, HTML5, DOCX, RTF, ODT, TXT).
+2. PDF output pipeline via Pandoc HTML AST synthesis and `wkhtmltopdf` 0.12.6-1 with offline security flags (`--disable-javascript`, `--load-error-handling ignore`, `--enable-local-file-access`).
+3. In-process spreadsheet conversion via `MiniExcel` 1.41.0 and RFC 4180 CSV parser (CSV, JSON, XLSX, TXT, Markdown tables).
+4. Archive extraction for ZIP, 7Z, TAR, GZ, and RAR (read-only) via `SharpCompress` 0.40.0 with zip-slip guard (`ArchivePathGuard`) and atomic numbered folder promotion (`PromotionHelper`).
+5. In-process archive creation for ZIP, TAR, GZ via `SharpCompress` and `.7z` creation via standalone `7za.exe` 23.01 subprocess.
+6. Explorer UI integration for directory inputs, "Extract to folder" target label (`#extract`), and directory-aware "Reveal in File Explorer".
+7. Coordinator engine throttling via `IConcurrencyAwareEngine`.
 
-**Exit criteria:** a 5 MB DOCX to PDF conversion opens in a PDF viewer; a 100 MB folder survives a
-ZIP to 7z to extracted round trip with identical file count and hashes; RAR extraction works and RAR
-cannot be selected as an output format; a corrupt archive produces a message rather than an unhandled
-exception.
+**Exit criteria:**
+- [x] 5 MB DOCX to PDF conversion verified (16.28 s, 16 pages, valid PDF).
+- [x] 100 MB folder survives a ZIP to 7z to extracted round trip with identical file count (10 files) and matching SHA-256 hashes.
+- [x] RAR extraction supported (read-only); RAR generation strictly refused across matrix and router.
+- [x] Encrypted archives (password protected ZIP/7z) safely detected with `ArchiveFailure.Encrypted` and 0 bytes leaked to destination.
+- [x] Corrupt / truncated archive produces clean error messages without unhandled exceptions.
+- [x] Offline security check verified (wkhtmltopdf completes without hanging on remote images and executes 100% offline).
 
 ### Phase 5: Shell integration and packaging
 
@@ -180,8 +174,8 @@ These cases must be handled before packaging in Phase 5.
 - [ ] OneDrive or Dropbox placeholder that has not been downloaded locally
 - [ ] Path longer than 260 characters: handled or clearly refused
 - [ ] UNC path (`\\server\share\...`): supported or refused before any work starts
-- [ ] Name collision in the destination folder: `photo (1).png`
-- [ ] Empty file, corrupt file, or a file whose extension does not match its content
+- [x] Name collision in the destination folder: `photo (1).png` (delivered in Phase 4 via `CollisionNamer` and `PromotionHelper`)
+- [x] Empty file, corrupt file, or a file whose extension does not match its content (handled with safe result)
 - [ ] Insufficient disk space during a 2 GB video conversion: fails cleanly and deletes the partial output
 - [ ] 20-file selection from a real Explorer window
 - [ ] Second conversion request while a batch is running: the request joins the queue

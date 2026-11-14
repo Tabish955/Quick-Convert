@@ -8,6 +8,7 @@ using QuickConvert.Core.Interfaces;
 using QuickConvert.Core.Ipc;
 using QuickConvert.Core.Models;
 using QuickConvert.Core.Services;
+using QuickConvert.Engines.Docs;
 using QuickConvert.Engines.Images;
 using QuickConvert.Engines.Media;
 using QuickConvert.UI.ViewModels;
@@ -90,11 +91,11 @@ public partial class App : Application
             _pipeService.StartPipeServer();
 
             // 4. Initial Routing based on launch arguments
-            var incomingFiles = e.Args.Where(File.Exists).ToList();
+            var incomingFiles = e.Args.Where(p => File.Exists(p) || Directory.Exists(p)).ToList();
 
             if (incomingFiles.Count > 0)
             {
-                // Launched with files from Explorer -> Show Quick Popup
+                // Launched with files or folders from Explorer -> Show Quick Popup
                 var cursor = SingleInstancePipeService.GetCursorPosition();
                 ShowQuickPopup(incomingFiles, cursor);
             }
@@ -120,6 +121,9 @@ public partial class App : Application
         // Engines are registered as multiples; the router is the only way anything reaches them.
         services.AddSingleton<IConversionEngine, FfmpegConversionEngine>();
         services.AddSingleton<IConversionEngine, MagickImageConversionEngine>();
+        services.AddSingleton<IConversionEngine, PandocConversionEngine>();
+        services.AddSingleton<IConversionEngine, SpreadsheetConversionEngine>();
+        services.AddSingleton<IConversionEngine, ArchiveConversionEngine>();
         services.AddSingleton<IConversionEngineRouter, ConversionEngineRouter>();
 
         // Core Services

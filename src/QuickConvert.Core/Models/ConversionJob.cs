@@ -44,6 +44,12 @@ public partial class ConversionJob : ObservableObject
     [ObservableProperty]
     private string? _errorMessage;
 
+    [ObservableProperty]
+    private JobEndpointKind _sourceKind = JobEndpointKind.File;
+
+    [ObservableProperty]
+    private JobEndpointKind _targetKind = JobEndpointKind.File;
+
     /// <summary>
     /// Human-readable file size (e.g. "12.4 MB").
     /// </summary>
@@ -77,8 +83,35 @@ public partial class ConversionJob : ObservableObject
             FileSizeBytes = fileInfo.Exists ? fileInfo.Length : 0,
             SourceExtension = ext,
             TargetExtension = defaultTargetExt ?? string.Empty,
+            SourceKind = JobEndpointKind.File,
+            TargetKind = JobEndpointKind.File,
             Status = ConversionStatus.Pending,
             StatusText = "Pending"
         };
+    }
+
+    /// <summary>
+    /// Factory helper to build a ConversionJob from a file or directory path.
+    /// </summary>
+    public static ConversionJob FromPath(string path, string? defaultTargetExt = null)
+    {
+        if (Directory.Exists(path))
+        {
+            var dirInfo = new DirectoryInfo(path);
+            return new ConversionJob
+            {
+                InputFilePath = dirInfo.FullName,
+                FileName = dirInfo.Name,
+                FileSizeBytes = 0,
+                SourceExtension = string.Empty,
+                TargetExtension = defaultTargetExt ?? string.Empty,
+                SourceKind = JobEndpointKind.Directory,
+                TargetKind = JobEndpointKind.File,
+                Status = ConversionStatus.Pending,
+                StatusText = "Pending"
+            };
+        }
+
+        return FromFilePath(path, defaultTargetExt);
     }
 }

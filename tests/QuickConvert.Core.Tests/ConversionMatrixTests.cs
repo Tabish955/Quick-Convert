@@ -66,4 +66,15 @@ public class ConversionMatrixTests
                 StringComparer.OrdinalIgnoreCase);
         }
     }
+
+    [Fact]
+    public void ReservedTargets_AreNeverInTheMatrix()
+    {
+        var allTargets = ConversionMatrix.Sources.SelectMany(ConversionMatrix.GetTargets).Distinct();
+        foreach (var target in allTargets)
+        {
+            Assert.False(ConversionTargets.IsReserved(target), $"ConversionMatrix contains reserved target '{target}'.");
+        }
+        Assert.DoesNotContain(ConversionMatrix.Sources, ConversionTargets.IsReserved);
+    }
 }

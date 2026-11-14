@@ -66,9 +66,11 @@ BenchmarkDotNet.Artifacts/
 tools/ffmpeg/**
 tools/7z/**
 tools/pandoc/**
+tools/wkhtmltopdf/**
 !tools/ffmpeg/.gitkeep
 !tools/7z/.gitkeep
 !tools/pandoc/.gitkeep
+!tools/wkhtmltopdf/.gitkeep
 tools/_downloads/
 
 # -----------------------------------------------------------------------------

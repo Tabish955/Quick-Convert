@@ -94,4 +94,17 @@ public static class PandocArgumentBuilder
         args.Add("--metadata");
         args.Add($"pagetitle={title}");
     }
+
+    public static IReadOnlyList<string> BuildWkhtmltopdf(string inputHtml, string outputPdf) => new[]
+    {
+        "--quiet",
+        "--enable-local-file-access",
+        "--disable-javascript",
+        "--load-error-handling", "ignore",
+        "--load-media-error-handling", "ignore",
+        "--encoding", "utf-8",
+        "--page-size", "A4",
+        inputHtml,
+        outputPdf,
+    };
 }

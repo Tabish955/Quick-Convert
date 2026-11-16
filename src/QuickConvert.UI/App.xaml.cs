@@ -1,4 +1,6 @@
 using System.IO;
+using System.Runtime.InteropServices;
+using QuickConvert.Core.Shell;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -38,9 +40,69 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnCurrentDomainUnhandledException;
     }
 
+    [DllImport("kernel32.dll")]
+    private static extern bool AttachConsole(int dwProcessId);
+    private const int ATTACH_PARENT_PROCESS = -1;
+
+    private static void InitConsoleOutput()
+    {
+        try
+        {
+            AttachConsole(ATTACH_PARENT_PROCESS);
+            var stream = Console.OpenStandardOutput();
+            if (stream != Stream.Null)
+            {
+                var standardOutput = new StreamWriter(stream) { AutoFlush = true };
+                Console.SetOut(standardOutput);
+            }
+        }
+        catch { }
+    }
+
+    private bool HandleCliSwitches(string[] args)
+    {
+        if (args == null || args.Length == 0) return false;
+
+        if (args.Contains("--version", StringComparer.OrdinalIgnoreCase))
+        {
+            InitConsoleOutput();
+            Console.WriteLine("QuickConvert v1.0.0");
+            Shutdown(0);
+            return true;
+        }
+
+        if (args.Contains("--register-shell", StringComparer.OrdinalIgnoreCase))
+        {
+            InitConsoleOutput();
+            var exePath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "QuickConvert.UI.exe");
+            var shell = new ShellIntegrationService();
+            var res = shell.Register(exePath);
+            Console.WriteLine(res.Message);
+            Shutdown(res.Success ? 0 : 1);
+            return true;
+        }
+
+        if (args.Contains("--unregister-shell", StringComparer.OrdinalIgnoreCase))
+        {
+            InitConsoleOutput();
+            var shell = new ShellIntegrationService();
+            var res = shell.Unregister();
+            Console.WriteLine(res.Message);
+            Shutdown(res.Success ? 0 : 1);
+            return true;
+        }
+
+        return false;
+    }
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (HandleCliSwitches(e.Args))
+        {
+            return;
+        }
 
         try
         {
@@ -128,6 +190,7 @@ public partial class App : Application
 
         // Core Services
         services.AddSingleton<BatchConversionCoordinator>();
+        services.AddSingleton<IShellIntegration, ShellIntegrationService>();
         services.AddSingleton(_pipeService!);
 
         // ViewModels

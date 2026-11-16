@@ -34,6 +34,18 @@ public sealed class ToolLocator
         {
             var p = Path.Combine(_appBase, "tools", _folder, _exe);
             if (_fileExists(p)) return p;
+
+            try
+            {
+                var dir = new DirectoryInfo(_appBase);
+                while (dir.Parent != null)
+                {
+                    dir = dir.Parent;
+                    var candidate = Path.Combine(dir.FullName, "tools", _folder, _exe);
+                    if (_fileExists(candidate)) return candidate;
+                }
+            }
+            catch { }
         }
 
         var cwd = Directory.GetCurrentDirectory();
@@ -41,6 +53,18 @@ public sealed class ToolLocator
         {
             var p = Path.Combine(cwd, "tools", _folder, _exe);
             if (_fileExists(p)) return p;
+
+            try
+            {
+                var dir = new DirectoryInfo(cwd);
+                while (dir.Parent != null)
+                {
+                    dir = dir.Parent;
+                    var candidate = Path.Combine(dir.FullName, "tools", _folder, _exe);
+                    if (_fileExists(candidate)) return candidate;
+                }
+            }
+            catch { }
         }
 
         if (!string.IsNullOrEmpty(_pathEnv))

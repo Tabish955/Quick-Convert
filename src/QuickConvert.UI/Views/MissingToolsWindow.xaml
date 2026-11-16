@@ -1,0 +1,81 @@
+<ui:FluentWindow x:Class="QuickConvert.UI.Views.MissingToolsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        mc:Ignorable="d"
+        Title="QuickConvert — External Tools Status"
+        Height="460" Width="600"
+        MinHeight="380" MinWidth="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="External Conversion Tools" FontSize="18" FontWeight="Bold"/>
+            <TextBlock Text="QuickConvert operates 100% offline. Core features like image conversions, spreadsheet conversions, and standard archive extractions work with zero external dependencies. Some extended formats require local CLI tools."
+                       FontSize="12" Foreground="#666666" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Status Summary Alert -->
+        <Border Grid.Row="1" Background="#FFF9E6" BorderBrush="#FFD072" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+            <TextBlock Text="The tools listed below were not discovered on your system. Conversions relying on these tools are currently disabled. You can install them using the scripts provided or by reinstalling QuickConvert with all tools bundled."
+                       FontSize="12" Foreground="#856404" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Missing Tools List -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,0,0,12">
+            <ItemsControl x:Name="MissingToolsItemsControl">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="#08888888" BorderBrush="#15888888" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,8">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" FontWeight="Bold" FontSize="13">
+                                        <Run Text="{Binding ToolName}"/>
+                                        <Run Text=" (" Foreground="#666666"/>
+                                        <Run Text="{Binding ExeName}" FontFamily="Consolas" Foreground="#666666"/>
+                                        <Run Text=")" Foreground="#666666"/>
+                                    </TextBlock>
+                                </Grid>
+                                <TextBlock Text="{Binding AffectedConversions, StringFormat='Disabled features: {0}'}"
+                                           FontSize="11" Foreground="#555555" Margin="0,3,0,6" TextWrapping="Wrap"/>
+                                <TextBlock Text="To install, run PowerShell in the repository:" FontSize="10" Foreground="#888888" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding SetupScript, StringFormat='powershell -ExecutionPolicy Bypass -File {0}'}"
+                                         IsReadOnly="True"
+                                         FontFamily="Consolas"
+                                         FontSize="11"
+                                         Background="#0A888888"
+                                         BorderThickness="1"
+                                         BorderBrush="#20888888"
+                                         Padding="6,4"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Bottom Actions -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Close"
+                    Click="OnCloseClicked"
+                    IsDefault="True"
+                    Width="90"
+                    Height="32"/>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

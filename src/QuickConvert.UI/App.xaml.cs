@@ -1,6 +1,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using QuickConvert.Core.Shell;
+using QuickConvert.Core.Tools;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -191,6 +192,7 @@ public partial class App : Application
         // Core Services
         services.AddSingleton<BatchConversionCoordinator>();
         services.AddSingleton<IShellIntegration, ShellIntegrationService>();
+        services.AddSingleton<IToolProbeService, ToolProbeService>();
         services.AddSingleton(_pipeService!);
 
         // ViewModels

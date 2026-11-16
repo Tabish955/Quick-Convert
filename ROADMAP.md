@@ -146,6 +146,9 @@ These decisions must be resolved before the phase that depends on them.
 | D2 | Context menu implementation | Phase 2 investigation, Phase 5 delivery | Classic `HKCU` registry verb (appears under "Show more options" on Windows 11), `IExplorerCommand` with a signed MSIX package, or the classic verb in version 1.0 followed by the modern menu in 1.1 | Classic verb |
 | D3 | HEIC and AVIF support | Phase 2 | Include only if the imaging library decodes real sample files on a clean machine | Excluded, may be added later |
 | D4 | Code signing | Phase 5 | Unsigned with documented SmartScreen instructions, OV certificate, or EV certificate | Unsigned for version 1.0 |
+| D5 | Document to PDF rendering engine | Phase 4 | Pandoc HTML rendered by wkhtmltopdf, Pandoc with Typst as the PDF engine, or an in-process layout library | Pandoc HTML with wkhtmltopdf, with the reasoning in `docs/PHASE_4_DECISIONS.md`. Typst has not been evaluated. |
+| D6 | How small test fixture binaries are obtained | Phase 4 | Commit the sample archives, or fetch them with a script and let the tests skip when absent | Fetch by script, tests skip. The files are a few hundred bytes, so committing them is the cheaper option and is still open. |
+| D7 | Parallelism per engine | Phase 4 | One global concurrency limit, or an engine-supplied hint | Engine supplied hint through `IConcurrencyAwareEngine`, described in `docs/PHASE_4_SPEC.md` section 2.3. |
 
 ---
 

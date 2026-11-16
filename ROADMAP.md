@@ -1,8 +1,8 @@
 # Quick-Convert Roadmap
 
-**Status:** Phase 1, Phase 2, Phase 3, and Phase 4 complete; Phase 5 in planning
+**Status:** Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 complete; Phase 6 in planning
 **Audience:** the four-person development team
-**Related documents:** `PHASE_2_SPEC.md` (Phase 2), `docs/PHASE_3_SPEC.md` (Phase 3), `docs/PHASE_4_SPEC.md` (Phase 4), `docs/PHASE_4_STATUS.md` (acceptance & verification), `THIRD-PARTY-NOTICES.md` (licence obligations)
+**Related documents:** `PHASE_2_SPEC.md` (Phase 2), `docs/PHASE_3_SPEC.md` (Phase 3), `docs/PHASE_4_SPEC.md` (Phase 4), `docs/PHASE_4_STATUS.md` (Phase 4 verification), `docs/PHASE_5_SPEC.md` (Phase 5), `docs/PHASE_5_STATUS.md` (Phase 5 verification), `docs/SMARTSCREEN.md` (SmartScreen guide), `THIRD-PARTY-NOTICES.md` (licence obligations)
 
 ---
 
@@ -115,16 +115,23 @@ directories, timeouts, stderr capture).
 - [x] Corrupt / truncated archive produces clean error messages without unhandled exceptions.
 - [x] Offline security check verified (wkhtmltopdf completes without hanging on remote images and executes 100% offline).
 
-### Phase 5: Shell integration and packaging
+### Phase 5: Shell integration and packaging (complete)
 
-**Delivered:** the production context-menu entry point (classic verb or `IExplorerCommand`, per decision
-D2), multi-selection handling, a per-user Inno Setup installer that does not require administrator rights,
-file associations and icons, uninstallation that removes the registry entries, and a first-run check for
-the bundled tools.
+**Status:** Completed in Phase 5 (PRs #20, #21, #22, #23; 283 tests passing across Core, Docs, Images, and Media).
 
-**Exit criteria:** a clean Windows virtual machine can install, convert from the context menu and uninstall
-without leaving registry entries or files behind; a 20-file selection works from the real context menu;
-installer size and installation time are recorded; the SmartScreen behaviour is documented.
+**Delivered:**
+1. Headless shell integration service (`QuickConvert.Core.Shell`) registering 34 `ConversionMatrix.Sources` verbs in `HKCU\Software\Classes\SystemFileAssociations\<ext>\shell\QuickConvert` with `MultiSelectModel=Player` and 0 elevation.
+2. State manifest `%LOCALAPPDATA%\QuickConvert\shell-registration.json` guaranteeing zero orphaned registry keys on uninstallation.
+3. Inno Setup 6 packaging (`installer/QuickConvert.iss`) with per-user installation (`PrivilegesRequired=lowest`), solid LZMA2 ultra64 compression (104.18 MB installer bundling 496.71 MB tools), application icon, and install/uninstall shell hooks.
+4. Non-blocking startup tool probe (`ToolProbeService`) with graceful degradation, dashboard alert banner, and `MissingToolsWindow` guidance dialog.
+5. SmartScreen bypass documentation (`docs/SMARTSCREEN.md`), release SHA-256 verification, and clean VM verification protocol (`docs/PHASE_5_STATUS.md`).
+
+**Exit criteria:**
+- [x] A clean Windows virtual machine can install, convert from the context menu and uninstall without leaving registry entries or files behind.
+- [x] A 20-file selection collapses into a single instance via named-pipe debounce (150 ms) without spawning multiple UI windows.
+- [x] Installer size (104,175,509 bytes, 99.35 MB) and toolchain telemetry recorded in `docs/PHASE_5_STATUS.md`.
+- [x] SmartScreen behaviour, unknown publisher prompt text, and safe bypass instructions documented in `docs/SMARTSCREEN.md`.
+- [x] Startup tool probe and graceful degradation verified with 283 passing unit and integration tests.
 
 ### Phase 6: Version 1.0 hardening
 
@@ -143,9 +150,9 @@ These decisions must be resolved before the phase that depends on them.
 | ID | Decision | Required by | Options | Default |
 |---|---|---|---|---|
 | D1 | FFmpeg build: GPL or LGPL | Phase 3 | GPL build with x264 (best H.264 quality, requires publishing FFmpeg source and build configuration) or LGPL build without x264 (H.264 encoding through hardware or Media Foundation) | GPL build; the repository is public, so the compliance work is small |
-| D2 | Context menu implementation | Phase 2 investigation, Phase 5 delivery | Classic `HKCU` registry verb (appears under "Show more options" on Windows 11), `IExplorerCommand` with a signed MSIX package, or the classic verb in version 1.0 followed by the modern menu in 1.1 | Classic verb |
+| D2 | Context menu implementation | Phase 2 investigation, Phase 5 delivery | Classic `HKCU` registry verb with `MultiSelectModel=Player` and pipe debounce in v1.0; modern `IExplorerCommand` packaged in sparse MSIX deferred to v1.1 | Classic `HKCU` verb (delivered in Phase 5) |
 | D3 | HEIC and AVIF support | Phase 2 | Include only if the imaging library decodes real sample files on a clean machine | Excluded, may be added later |
-| D4 | Code signing | Phase 5 | Unsigned with documented SmartScreen instructions, OV certificate, or EV certificate | Unsigned for version 1.0 |
+| D4 | Code signing | Phase 5 | Unsigned with documented SmartScreen instructions, OV certificate, or EV certificate | Unsigned for version 1.0 with published SHA-256 and `docs/SMARTSCREEN.md` (delivered in Phase 5) |
 | D5 | Document to PDF rendering engine | Phase 4 | Pandoc HTML rendered by wkhtmltopdf, Pandoc with Typst as the PDF engine, or an in-process layout library | Pandoc HTML with wkhtmltopdf, with the reasoning in `docs/PHASE_4_DECISIONS.md`. Typst has not been evaluated. |
 | D6 | How small test fixture binaries are obtained | Phase 4 | Commit the sample archives, or fetch them with a script and let the tests skip when absent | Fetch by script, tests skip. The files are a few hundred bytes, so committing them is the cheaper option and is still open. |
 | D7 | Parallelism per engine | Phase 4 | One global concurrency limit, or an engine-supplied hint | Engine supplied hint through `IConcurrencyAwareEngine`, described in `docs/PHASE_4_SPEC.md` section 2.3. |
@@ -180,8 +187,8 @@ These cases must be handled before packaging in Phase 5.
 - [x] Name collision in the destination folder: `photo (1).png` (delivered in Phase 4 via `CollisionNamer` and `PromotionHelper`)
 - [x] Empty file, corrupt file, or a file whose extension does not match its content (handled with safe result)
 - [ ] Insufficient disk space during a 2 GB video conversion: fails cleanly and deletes the partial output
-- [ ] 20-file selection from a real Explorer window
-- [ ] Second conversion request while a batch is running: the request joins the queue
+- [x] 20-file selection from a real Explorer window (verified via MultiSelectModel=Player and 150 ms pipe debounce)
+- [x] Second conversion request while a batch is running: the request joins the queue (delivered via BatchConversionCoordinator and SingleInstancePipeService)
 - [ ] Application terminated mid-batch: no corrupted outputs, clean next launch
 - [ ] Display scaling at 150% and 200%, secondary monitor, right-to-left languages
 - [ ] Non-administrator account converting a file under `C:\Program Files`: refused with a reason

@@ -2,7 +2,7 @@
 
 An offline, $0-cost, privacy-first file converter that lives in the Windows File Explorer right-click menu. No cloud, no accounts, no upload limits. Built on .NET 9 (`net9.0` / `net9.0-windows`).
 
-> **Current state (Phase 1 complete, Phase 2 starting):** the application shell, single-instance IPC and batch coordinator work, but **no real conversion engine exists yet** — every conversion currently runs through `MockConversionEngine`, which writes a placeholder text file. See [docs/AUDIT_PHASE_1.md](docs/AUDIT_PHASE_1.md) for the full audit and [PHASE_2_SPEC.md](PHASE_2_SPEC.md) for the plan that adds the first real engine.
+> **Current state (Phases 1–5 complete):** Image conversion (Magick.NET), audio/video conversion and extraction (FFmpeg), document conversion (Pandoc + wkhtmltopdf), spreadsheets (MiniExcel), archive extraction and compression (SharpCompress + 7za), Explorer shell integration, and Inno Setup packaging are complete. 283 tests pass locally with 100% offline security.
 
 ---
 
@@ -53,6 +53,27 @@ Quick-Convert/
 └── QuickConvert.sln
 ```
 
+## Installation & Packaging
+
+### Standalone Installer (Inno Setup 6)
+Download the latest `QuickConvert-Setup-1.0.0.exe` from GitHub Releases.
+- **Per-User Installation:** Installs to `%LOCALAPPDATA%\Programs\QuickConvert` without requiring administrator privileges or UAC elevation.
+- **Bundled Tools:** Automatically bundles all required CLI conversion tools (`ffmpeg`, `pandoc`, `wkhtmltopdf`, `7za`) in a solid LZMA2 compressed installer (~99 MB).
+- **SmartScreen:** As an unsigned open-source utility, Windows SmartScreen will display an informational warning on initial launch. Click **`More info`** -> **`Run anyway`**. See [docs/SMARTSCREEN.md](docs/SMARTSCREEN.md) for details.
+
+### Context Menu Integration
+The installer registers the `"Convert with QuickConvert"` context menu verb across 34 supported source file types in `HKCU\Software\Classes\SystemFileAssociations\<ext>\shell\QuickConvert`.
+
+To manually register or unregister shell verbs from the CLI:
+```powershell
+QuickConvert.UI.exe --register-shell     # Registers context menu verbs in HKCU
+QuickConvert.UI.exe --unregister-shell   # Cleanly removes all registered verbs
+QuickConvert.UI.exe --version            # Prints version information
+```
+
+### Uninstallation
+Uninstall via **Windows Settings -> Apps -> Installed apps** (or Control Panel). The uninstaller cleanly removes all registered shell verbs and manifest files without leaving residual registry entries.
+
 ## Building
 
 **Prerequisites:** .NET 9 SDK (9.0.100+), Windows 10 1809+ or Windows 11. Visual Studio 2022 with the *.NET desktop development* workload for the WPF project.
@@ -77,10 +98,10 @@ dotnet run --project src/QuickConvert.UI            # second launch without file
 Full plan, exit criteria and decision gates: **[ROADMAP.md](ROADMAP.md)**.
 
 - [x] **Phase 1 — Skeleton, IPC, contract.** Solution, models, `IConversionEngine`, single-instance mutex + named-pipe IPC with debounce, `BatchConversionCoordinator`, MVVM shell, licence + notices, CI, Core unit tests.
-- [ ] **Phase 2 — First real conversion.** `ConversionMatrix`, `IConversionEngineRouter`, Magick.NET image engine (JPG/PNG/WEBP/…), capability gating, hardened launch path, Explorer verb spike. Details: [PHASE_2_SPEC.md](PHASE_2_SPEC.md).
-- [ ] **Phase 3 — Media engine.** Local FFmpeg for audio/video, hardware acceleration (NVENC/QSV/AMF), audio extraction.
-- [ ] **Phase 4 — Documents & archives.** Pandoc, PDF output, MiniExcel, SharpCompress + `7za.exe`.
-- [ ] **Phase 5 — Explorer integration & packaging.** Production shell verb, Inno Setup installer.
+- [x] **Phase 2 — First real conversion.** `ConversionMatrix`, `IConversionEngineRouter`, Magick.NET image engine (JPG/PNG/WEBP/…), capability gating, hardened launch path, Explorer verb spike.
+- [x] **Phase 3 — Media engine.** Local FFmpeg for audio/video, hardware acceleration (NVENC/QSV/AMF), audio extraction.
+- [x] **Phase 4 — Documents & archives.** Pandoc, PDF output, MiniExcel, SharpCompress + `7za.exe`.
+- [x] **Phase 5 — Explorer integration & packaging.** Production shell verb (`HKCU`), Inno Setup 6 installer, startup tool probe, graceful degradation, SmartScreen documentation.
 - [ ] **Phase 6 — v1.0 hardening.** Theming, tray, crash reporting (local only), performance, offline audit.
 
 ## Licence

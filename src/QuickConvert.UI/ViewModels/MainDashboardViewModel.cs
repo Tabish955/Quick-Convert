@@ -4,25 +4,24 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using QuickConvert.Core.Diagnostics;
 using QuickConvert.Core.Interfaces;
 using QuickConvert.Core.Models;
 using QuickConvert.Core.Services;
+using QuickConvert.Core.Tools;
 
 namespace QuickConvert.UI.ViewModels;
 
 /// <summary>
 /// ViewModel driving the Main Full Dashboard.
-/// Manages batch queue, concurrency, drag-and-drop file ingestion, and batch settings.
-///
-/// Phase 2: the global format list is derived from the router (matrix ∩ engine capability)
-/// instead of a hardcoded sample list, enqueue-time rejections are surfaced, and
-/// AddFiles(IEnumerable<string>) is renamed to AddFilePaths so it no longer shadows the
-/// generated AddFilesCommand.
+/// Manages batch queue, concurrency, drag-and-drop file ingestion, batch settings,
+/// and startup tool availability probing for graceful degradation.
 /// </summary>
 public partial class MainDashboardViewModel : ObservableObject
 {
     private readonly BatchConversionCoordinator _coordinator;
     private readonly IConversionEngineRouter _router;
+    private readonly IToolProbeService _toolProbeService;
 
     public ObservableCollection<ConversionJob> Jobs => _coordinator.Jobs;
 
@@ -56,12 +55,24 @@ public partial class MainDashboardViewModel : ObservableObject
     [ObservableProperty]
     private string _statusMessage = string.Empty;
 
+    [ObservableProperty]
+    private bool _hasMissingTools;
+
+    [ObservableProperty]
+    private string _missingToolsSummary = string.Empty;
+
+    public IReadOnlyList<MissingToolInfo> MissingTools { get; private set; } = Array.Empty<MissingToolInfo>();
+
     public ObservableCollection<string> AvailableGlobalFormats { get; } = new();
 
-    public MainDashboardViewModel(BatchConversionCoordinator coordinator, IConversionEngineRouter router)
+    public MainDashboardViewModel(
+        BatchConversionCoordinator coordinator,
+        IConversionEngineRouter router,
+        IToolProbeService? toolProbeService = null)
     {
         _coordinator = coordinator;
         _router = router;
+        _toolProbeService = toolProbeService ?? new ToolProbeService();
 
         _coordinator.StateChanged += OnCoordinatorStateChanged;
         _coordinator.BatchCompleted += OnBatchCompleted;
@@ -73,6 +84,39 @@ public partial class MainDashboardViewModel : ObservableObject
 
         RefreshGlobalFormats();
         UpdateState();
+
+        RunStartupToolProbe();
+    }
+
+    private async void RunStartupToolProbe()
+    {
+        try
+        {
+            var result = await _toolProbeService.ProbeAsync();
+            if (!result.AllPresent)
+            {
+                MissingTools = result.MissingTools;
+                HasMissingTools = true;
+                var toolNames = string.Join(", ", result.MissingTools.Select(t => t.ToolName));
+                MissingToolsSummary = $"Optional tool(s) missing: {toolNames}. Conversions requiring these tools are disabled.";
+                QuickConvertLogger.Warn($"Tool probe discovered missing external tool(s): {toolNames}");
+            }
+        }
+        catch (Exception ex)
+        {
+            QuickConvertLogger.Warn($"Non-blocking startup tool probe encountered error: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    public void ShowMissingToolsDetails()
+    {
+        if (MissingTools.Count == 0) return;
+        var dialog = new Views.MissingToolsWindow(MissingTools)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        dialog.ShowDialog();
     }
 
     private void OnCoordinatorStateChanged(object? sender, EventArgs e)

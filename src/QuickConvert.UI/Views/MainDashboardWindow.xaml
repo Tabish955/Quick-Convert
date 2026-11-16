@@ -18,6 +18,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -43,8 +44,44 @@
             </StackPanel>
         </Grid>
 
+        <!-- Missing Tools Banner (Graceful Degradation Notice) -->
+        <Border Grid.Row="1"
+                Visibility="{Binding HasMissingTools, Converter={StaticResource BoolToVis}}"
+                Background="#FFF8E7"
+                BorderBrush="#FFD072"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="14,10"
+                Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="⚠️" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding MissingToolsSummary}"
+                           Foreground="#856404"
+                           FontWeight="Medium"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"/>
+
+                <Button Grid.Column="2"
+                        Content="View Details &amp; Install"
+                        Command="{Binding ShowMissingToolsDetailsCommand}"
+                        Height="30"
+                        Padding="12,0"
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
         <!-- Action Toolbar -->
-        <Border Grid.Row="1" Background="#0C888888" CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
+        <Border Grid.Row="2" Background="#0C888888" CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -107,7 +144,7 @@
         </Border>
 
         <!-- Batch Queue DataGrid -->
-        <DataGrid Grid.Row="2"
+        <DataGrid Grid.Row="3"
                   ItemsSource="{Binding Jobs}"
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
@@ -168,7 +205,7 @@
         </DataGrid>
 
         <!-- Bottom Status & Overall Progress -->
-        <Grid Grid.Row="3" Margin="0,14,0,0">
+        <Grid Grid.Row="4" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>

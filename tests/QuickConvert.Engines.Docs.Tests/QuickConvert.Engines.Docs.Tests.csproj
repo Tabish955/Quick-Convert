@@ -22,4 +22,8 @@
     <ProjectReference Include="..\..\src\QuickConvert.Engines.Docs\QuickConvert.Engines.Docs.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

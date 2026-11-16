@@ -1,10 +1,14 @@
 using QuickConvert.Engines.Docs.Documents;
 using QuickConvert.Engines.Docs.Tools;
+using Xunit.Abstractions;
 
 namespace QuickConvert.Engines.Docs.Tests;
 
 public class DocumentConverterTests
 {
+    private readonly ITestOutputHelper? _output;
+    public DocumentConverterTests(ITestOutputHelper? output = null) => _output = output;
+
     private const string Pandoc = @"C:\t\pandoc.exe";
     private const string Wk = @"C:\t\wkhtmltopdf.exe";
 
@@ -266,6 +270,56 @@ public class DocumentConverterTests
         var c = new DocumentConverter(new FakeRunner(), () => Pandoc, () => Wk);
         Assert.False((await c.ConvertAsync(new DocumentRequest(Source(t, "a.pdf"), ".txt", t.Path, false), null, default)).Success);
         Assert.False((await c.ConvertAsync(new DocumentRequest(t.Sub("ghost.docx"), ".md", t.Path, false), null, default)).Success);
+    }
+
+    [SkippableFact]
+    public async Task Real_5mb_docx_to_pdf_conversion_retains_images_and_converts_successfully()
+    {
+        var pandoc = ToolVersions.PandocLocator().Locate();
+        var wk = ToolVersions.WkhtmltopdfLocator().Locate();
+        Skip.If(pandoc is null, "Pandoc not installed");
+        Skip.If(wk is null, "wkhtmltopdf not installed");
+
+        var sampleDocx = Path.Combine(Directory.GetCurrentDirectory(), "sample-5mb.docx");
+        if (!File.Exists(sampleDocx))
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir.Parent != null)
+            {
+                dir = dir.Parent;
+                var candidate = Path.Combine(dir.FullName, "sample-5mb.docx");
+                if (File.Exists(candidate)) { sampleDocx = candidate; break; }
+            }
+        }
+        Skip.IfNot(File.Exists(sampleDocx), "sample-5mb.docx not found");
+
+        using var t = new TempDir();
+        var converter = new DocumentConverter(new ToolProcessRunner(), () => pandoc, () => wk);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = await converter.ConvertAsync(
+            new DocumentRequest(sampleDocx, ".pdf", t.Path, false),
+            null,
+            default);
+        sw.Stop();
+
+        Assert.True(result.Success, result.Message);
+        Assert.NotNull(result.OutputPath);
+        Assert.True(File.Exists(result.OutputPath));
+
+        var pdfBytes = File.ReadAllBytes(result.OutputPath);
+        var pdfText = System.Text.Encoding.ASCII.GetString(pdfBytes);
+
+        var imageMatches = System.Text.RegularExpressions.Regex.Matches(pdfText, @"/Subtype\s*/Image");
+        Assert.Equal(3, imageMatches.Count);
+
+        var pageMatches = System.Text.RegularExpressions.Regex.Matches(pdfText, @"/Type\s*/Page[^s]");
+        Assert.True(pageMatches.Count > 0);
+
+        _output?.WriteLine($"Sample size: {new FileInfo(sampleDocx).Length} bytes");
+        _output?.WriteLine($"Conversion time: {sw.ElapsedMilliseconds} ms");
+        _output?.WriteLine($"Output PDF size: {pdfBytes.Length} bytes");
+        _output?.WriteLine($"Page count: {pageMatches.Count}");
+        _output?.WriteLine($"Image XObjects: {imageMatches.Count}");
     }
 
     private sealed class SyncProgress(List<int> sink) : IProgress<int>

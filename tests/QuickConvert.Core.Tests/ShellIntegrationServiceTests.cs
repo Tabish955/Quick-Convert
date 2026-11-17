@@ -163,6 +163,38 @@ public class ShellIntegrationServiceTests
         Assert.False(service.IsRegistered());
     }
 
+    [Fact]
+    public void RegisteredExtensions_EqualsConversionMatrixSources_AndRarIsSourceOnly()
+    {
+        var reg = new FakeRegistry();
+        using var tempDir = new TempTestDir();
+        var manifestPath = Path.Combine(tempDir.Path, "shell-registration.json");
+        var service = new ShellIntegrationService(reg, manifestPath);
+
+        var result = service.Register(TestExePath);
+        Assert.True(result.Success);
+
+        var manifestJson = File.ReadAllText(manifestPath);
+        var manifest = JsonSerializer.Deserialize<ShellRegistrationManifest>(manifestJson);
+        Assert.NotNull(manifest);
+
+        var registeredSet = new HashSet<string>(manifest.RegisteredExtensions, StringComparer.OrdinalIgnoreCase);
+        var matrixSourcesSet = new HashSet<string>(ConversionMatrix.Sources, StringComparer.OrdinalIgnoreCase);
+
+        // Assert the set of extensions the shell service registers equals ConversionMatrix.Sources exactly
+        Assert.Equal(matrixSourcesSet, registeredSet);
+
+        // Assert .rar is in that set while never appearing as a target
+        Assert.Contains(".rar", registeredSet);
+        Assert.Contains(".rar", matrixSourcesSet);
+
+        foreach (var source in ConversionMatrix.Sources)
+        {
+            var targets = ConversionMatrix.GetTargets(source);
+            Assert.DoesNotContain(".rar", targets, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     [SkippableFact]
     public void Real_Registry_CanBeToggledOnWindows()
     {

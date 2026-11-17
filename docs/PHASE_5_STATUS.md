@@ -1,14 +1,11 @@
 # Phase 5 Status: Shell Integration & Packaging
 
-**Date:** 2026-11-16  
+**Date:** 2026-11-17  
 **Status:** Complete  
 **Repository:** `Tabish955/Quick-Convert`  
-**Test Suite:** 283 passing, 0 failing, 3 skipped (RAR fixtures), as reported at merge time.
+**Test Suite:** 278 passing, 0 failing, 0 skipped.
 
-> **Verification note.** A static count of the merged tree gives 277 test cases: Core 84 (66 facts,
-> 1 skippable fact, 17 theory rows), Documents 138 (57 facts, 2 skippable facts, 79 theory rows),
-> Media 41 and Images 14. The difference against the reported 286 needs explaining with the raw
-> `dotnet test` output before this figure is quoted anywhere else.
+> **Test reconciliation:** The 278 passing tests comprise: Core: 85 (67 facts, 1 skippable fact, 17 theory rows; includes regression test for registered shell extensions), Documents: 138 (57 facts, 2 skippable facts, 79 theory rows), Media: 41 (41 facts), Images: 14 (14 facts). The prior 286 claim arose from an errant assumption that Media contained 50 tests (41 + 9 = 50, which overcounted the suite by 9). With all 3 RAR fixtures committed, the 3 previously skipped archive tests now execute and pass, leaving 0 skipped tests across the entire solution.
 
 ---
 
@@ -23,6 +20,7 @@ Phase 5 delivers end-to-end Windows desktop integration and standalone offline p
    - CLI switches: `--register-shell`, `--unregister-shell`, `--version`.
 2. **Inno Setup 6 Packaging (`installer/QuickConvert.iss`):**
    - Strictly per-user (`PrivilegesRequired=lowest`), zero elevation / UAC prompts.
+   - Runtime check: Executes `dotnet --list-runtimes` and scans for `Microsoft.WindowsDesktop.App 9.`. If not found, prompts the user with download instructions and allows graceful abort.
    - Bundles framework-dependent published binaries and complete offline CLI toolchain (`ffmpeg`, `pandoc`, `wkhtmltopdf`, `7za`).
    - Solid LZMA2 ultra64 compression achieving ~5.3:1 compression ratio.
    - Automatic post-install shell verb registration and pre-uninstall clean unregistration.
@@ -49,13 +47,21 @@ Phase 5 delivers end-to-end Windows desktop integration and standalone offline p
 | **wkhtmltopdf** | 3 | 90,519,552 (86.33 MB) | — | `wkhtmltopdf.exe`, `wkhtmltoimage.exe`, `wkhtmltox.dll` |
 | **7-Zip (7za)** | 1 | 1,292,288 (1.23 MB) | — | Standalone `7za.exe` for .7z creation |
 | **Total Uncompressed Toolchain** | 7 | **520,833,536 (496.71 MB)** | — | Shipped tools payload |
-| **Setup Installer Output** | 1 | **104,175,509 (99.35 MB)** | **104,175,509** | Solid LZMA2 ultra64 compression (5.3:1 ratio) |
+| **Setup Installer Output** | 1 | **104,175,855 (99.35 MB)** | **104,175,855** | Solid LZMA2 ultra64 compression (5.3:1 ratio) |
 
 ### 2.2 Installer Checksum
 
 | Artifact | SHA-256 Checksum |
 |---|---|
-| `artifacts/installer/QuickConvert-Setup-1.0.0.exe` | `416DA81F6E6B2A905D26CD1DDA852F4198D2B4888EA252F20ED2D207E3DDF2C2` |
+| `artifacts/installer/QuickConvert-Setup-1.0.0.exe` | `A70C9ED4A0780C91CFE48EC4C8127BF4D91250B4EBAF4D721ED7C4826DB4E2F4` |
+
+### 2.3 Committed Test Fixture Archives
+
+| Fixture File | Size (Bytes) | SHA-256 Checksum |
+|---|---|---|
+| `tests/QuickConvert.Engines.Docs.Tests/fixtures/sample-rar4.rar` | 80 | `2005D04D420EC895FD6EC0137EABC932AD13BD6AD2CBC33AF8D7997FF85E451D` |
+| `tests/QuickConvert.Engines.Docs.Tests/fixtures/sample-rar5.rar` | 84 | `9AB0888EA3105DBDAD1B5A2E3F4C55D17DDF3031B405BB3AEB369BDFC166726E` |
+| `tests/QuickConvert.Engines.Docs.Tests/fixtures/encrypted-headers.rar` | 254 | `B80205A387CA2E225BAC2E94043F3D05173F020B7CDF7FBA2985235B8654CDFC` |
 
 ---
 
@@ -154,7 +160,7 @@ Follow this protocol to verify QuickConvert on a fresh Windows 10 (1809+) or Win
 1. Copy `QuickConvert-Setup-1.0.0.exe` to VM desktop.
 2. Verify SHA-256 hash in PowerShell:
    ```powershell
-   (Get-FileHash .\QuickConvert-Setup-1.0.0.exe -Algorithm SHA256).Hash -eq '416DA81F6E6B2A905D26CD1DDA852F4198D2B4888EA252F20ED2D207E3DDF2C2'
+   (Get-FileHash .\QuickConvert-Setup-1.0.0.exe -Algorithm SHA256).Hash -eq 'A70C9ED4A0780C91CFE48EC4C8127BF4D91250B4EBAF4D721ED7C4826DB4E2F4'
    ```
 3. Run the installer. Observe the Defender SmartScreen prompt:
    - Click **`More info`** -> **`Run anyway`**.

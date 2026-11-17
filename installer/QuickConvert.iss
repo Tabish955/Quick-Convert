@@ -83,9 +83,9 @@ Type: filesandordirs; Name: "{localappdata}\QuickConvert\logs"
 Type: dirifempty; Name: "{localappdata}\QuickConvert"
 
 [Code]
-; The application is published framework dependent, so the .NET 9 Desktop Runtime has to be present.
-; The presence of the shared framework registry key proves only that some version exists, so the host
-; is asked directly and its output is searched for the 9.x line.
+// The application is published framework dependent, so the .NET 9 Desktop Runtime has to be present.
+// The presence of the shared framework registry key proves only that some version exists, so the host
+// is asked directly and its output is searched for the 9.x line.
 function DotNetExePath(): String;
 var
   Candidate: String;
@@ -137,11 +137,11 @@ begin
   if HasDotNet9DesktopRuntime() then Exit;
 
   Answer := MsgBox(
-    'QuickConvert needs the .NET 9 Desktop Runtime (x64) to run.' + #13#10 + #13#10 +
+    'QuickConvert needs the .NET 9 Desktop Runtime (x64) to run.' + #13#10#13#10 +
     'Windows does not appear to have version 9 of that runtime installed, and this setup cannot run ' +
-    'the application without it.' + #13#10 + #13#10 +
-    'Install it from https://dotnet.microsoft.com/download/dotnet/9.0 and start this setup again,' +
-    #13#10 + 'or continue if you intend to install the runtime later.' + #13#10 + #13#10 +
+    'the application without it.' + #13#10#13#10 +
+    'Install it from https://dotnet.microsoft.com/download/dotnet/9.0 and start this setup again,' + #13#10 +
+    'or continue if you intend to install the runtime later.' + #13#10#13#10 +
     'Continue the installation anyway?',
     mbConfirmation, MB_YESNO or MB_DEFBUTTON2);
   Result := (Answer = IDYES);

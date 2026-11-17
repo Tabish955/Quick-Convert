@@ -59,6 +59,7 @@ Quick-Convert/
 Download the latest `QuickConvert-Setup-1.0.0.exe` from GitHub Releases.
 - **Per-User Installation:** Installs to `%LOCALAPPDATA%\Programs\QuickConvert` without requiring administrator privileges or UAC elevation.
 - **Bundled Tools:** Automatically bundles all required CLI conversion tools (`ffmpeg`, `pandoc`, `wkhtmltopdf`, `7za`) in a solid LZMA2 compressed installer (~99 MB).
+- **Prerequisite:** the .NET 9 Desktop Runtime (x64) must be installed first, since the application is published framework dependent. The setup checks for it and warns before continuing.
 - **SmartScreen:** As an unsigned open-source utility, Windows SmartScreen will display an informational warning on initial launch. Click **`More info`** -> **`Run anyway`**. See [docs/SMARTSCREEN.md](docs/SMARTSCREEN.md) for details.
 
 ### Context Menu Integration

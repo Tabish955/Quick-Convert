@@ -77,43 +77,72 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--unregister-shell"; Flags: runhidden; RunOnceId: "QuickConvertUnregisterShell"
 
 [UninstallDelete]
-; Delete manifest and clean installation directory residue
+; Delete the manifest, the rolling logs and any now-empty state folder
 Type: files; Name: "{localappdata}\QuickConvert\shell-registration.json"
+Type: filesandordirs; Name: "{localappdata}\QuickConvert\logs"
+Type: dirifempty; Name: "{localappdata}\QuickConvert"
 
 [Code]
-// Helper function to detect whether .NET 9.0 Desktop Runtime is present
-function IsDotNet9Installed(): Boolean;
+; The application is published framework dependent, so the .NET 9 Desktop Runtime has to be present.
+; The presence of the shared framework registry key proves only that some version exists, so the host
+; is asked directly and its output is searched for the 9.x line.
+function DotNetExePath(): String;
 var
-  ResultCode: Integer;
+  Candidate: String;
+begin
+  Result := '';
+  Candidate := ExpandConstant('{commonpf64}\dotnet\dotnet.exe');
+  if FileExists(Candidate) then begin Result := Candidate; Exit; end;
+  Candidate := ExpandConstant('{commonpf}\dotnet\dotnet.exe');
+  if FileExists(Candidate) then begin Result := Candidate; Exit; end;
+  Candidate := ExpandConstant('{localappdata}\Microsoft\dotnet\dotnet.exe');
+  if FileExists(Candidate) then begin Result := Candidate; Exit; end;
+end;
+
+function HasDotNet9DesktopRuntime(): Boolean;
+var
+  DotnetPath, OutputFile: String;
+  ResultCode, I: Integer;
+  Lines: TArrayOfString;
 begin
   Result := False;
-  // Check shared runtime registration in HKLM or via dotnet command
-  if RegKeyExists(HKLM, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App') then
-  begin
-    Result := True;
+  DotnetPath := DotNetExePath();
+  if DotnetPath = '' then Exit;
+
+  OutputFile := ExpandConstant('{tmp}\dotnet-runtimes.txt');
+  DeleteFile(OutputFile);
+
+  if not Exec(ExpandConstant('{cmd}'),
+              '/c ""' + DotnetPath + '" --list-runtimes > "' + OutputFile + '" 2>nul"',
+              '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Exit;
-  end;
-  if RegKeyExists(HKCU, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App') then
+
+  if not LoadStringsFromFile(OutputFile, Lines) then Exit;
+
+  for I := 0 to GetArrayLength(Lines) - 1 do
   begin
-    Result := True;
-    Exit;
-  end;
-  // Fallback: check dotnet CLI
-  if Exec('dotnet.exe', '--list-runtimes', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-  begin
-    Result := (ResultCode = 0);
+    if Pos('Microsoft.WindowsDesktop.App 9.', Lines[I]) > 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
   end;
 end;
 
 function InitializeSetup(): Boolean;
+var
+  Answer: Integer;
 begin
   Result := True;
-  if not IsDotNet9Installed() then
-  begin
-    MsgBox(
-      'QuickConvert requires the .NET 9.0 Desktop Runtime (x64) to run.' + #13#10 + #13#10 +
-      'If you encounter an error when launching, please install .NET 9.0 Desktop Runtime from:' + #13#10 +
-      'https://dotnet.microsoft.com/download/dotnet/9.0',
-      mbInformation, MB_OK);
-  end;
+  if HasDotNet9DesktopRuntime() then Exit;
+
+  Answer := MsgBox(
+    'QuickConvert needs the .NET 9 Desktop Runtime (x64) to run.' + #13#10 + #13#10 +
+    'Windows does not appear to have version 9 of that runtime installed, and this setup cannot run ' +
+    'the application without it.' + #13#10 + #13#10 +
+    'Install it from https://dotnet.microsoft.com/download/dotnet/9.0 and start this setup again,' +
+    #13#10 + 'or continue if you intend to install the runtime later.' + #13#10 + #13#10 +
+    'Continue the installation anyway?',
+    mbConfirmation, MB_YESNO or MB_DEFBUTTON2);
+  Result := (Answer = IDYES);
 end;

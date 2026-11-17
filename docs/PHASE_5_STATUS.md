@@ -3,7 +3,12 @@
 **Date:** 2026-11-16  
 **Status:** Complete  
 **Repository:** `Tabish955/Quick-Convert`  
-**Test Suite:** 283 passing, 0 failing, 3 skipped (RAR fixtures)  
+**Test Suite:** 283 passing, 0 failing, 3 skipped (RAR fixtures), as reported at merge time.
+
+> **Verification note.** A static count of the merged tree gives 277 test cases: Core 84 (66 facts,
+> 1 skippable fact, 17 theory rows), Documents 138 (57 facts, 2 skippable facts, 79 theory rows),
+> Media 41 and Images 14. The difference against the reported 286 needs explaining with the raw
+> `dotnet test` output before this figure is quoted anywhere else.
 
 ---
 
@@ -68,7 +73,7 @@ HKCU\Software\Classes\SystemFileAssociations\<ext>\shell\QuickConvert
 ```
 
 ### 3.2 Registered Source Extensions (34 Total)
-`.7z`, `.aac`, `.avi`, `.avif`, `.bmp`, `.csv`, `.docx`, `.epub`, `.flac`, `.gif`, `.gz`, `.heic`, `.html`, `.ico`, `.jpeg`, `.jpg`, `.json`, `.m4a`, `.mkv`, `.mobi`, `.mov`, `.mp3`, `.mp4`, `.odt`, `.ogg`, `.png`, `.rar`, `.rtf`, `.tar`, `.tiff`, `.txt`, `.webm`, `.wma`, `.wmv`, `.xlsx`, `.zip`.
+`.7z`, `.aac`, `.avi`, `.bmp`, `.csv`, `.docx`, `.flac`, `.gif`, `.gz`, `.html`, `.jpeg`, `.jpg`, `.json`, `.m4a`, `.md`, `.mkv`, `.mov`, `.mp3`, `.mp4`, `.odt`, `.ogg`, `.pdf`, `.png`, `.rar`, `.rtf`, `.tar`, `.tiff`, `.txt`, `.wav`, `.webm`, `.webp`, `.wma`, `.wmv`, `.zip`.
 
 ### 3.3 State Manifest
 Installed extensions are persisted to:
@@ -79,10 +84,13 @@ Installed extensions are persisted to:
   "AppVersion": "1.0.0",
   "ExecutablePath": "C:\\Users\\<user>\\AppData\\Local\\Programs\\QuickConvert\\QuickConvert.UI.exe",
   "RegisteredExtensions": [
-    ".7z", ".aac", ".avi", ".avif", ".bmp", ".csv", ".docx", ".epub", ".flac", ".gif",
-    ".gz", ".heic", ".html", ".ico", ".jpeg", ".jpg", ".json", ".m4a", ".mkv", ".mobi",
-    ".mov", ".mp3", ".mp4", ".odt", ".ogg", ".png", ".rar", ".rtf", ".tar", ".tiff",
-    ".txt", ".webm", ".wma", ".wmv", ".xlsx", ".zip"
+    ".7z", ".aac", ".avi", ".bmp", ".csv",
+    ".docx", ".flac", ".gif", ".gz", ".html",
+    ".jpeg", ".jpg", ".json", ".m4a", ".md",
+    ".mkv", ".mov", ".mp3", ".mp4", ".odt",
+    ".ogg", ".pdf", ".png", ".rar", ".rtf",
+    ".tar", ".tiff", ".txt", ".wav", ".webm",
+    ".webp", ".wma", ".wmv", ".zip"
   ]
 }
 ```
@@ -91,7 +99,9 @@ During uninstallation:
 2. Reads the exact extension list from `shell-registration.json`.
 3. Deletes every registered `SystemFileAssociations\<ext>\shell\QuickConvert` key.
 4. Removes the parent `<ext>\shell` key if empty.
-5. Inno Setup deletes `shell-registration.json` and purges the application directory.
+5. Inno Setup deletes `shell-registration.json`, the rolling logs under
+   `%LOCALAPPDATA%\QuickConvert\logs`, the state folder once it is empty, and the application
+   directory.
 6. **Result:** Exactly 0 orphaned registry keys remain.
 
 ---
